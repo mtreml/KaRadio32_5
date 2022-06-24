@@ -1,4 +1,3 @@
-
 /******************************************************************************
  * 
  * Copyright 2017 karawin (http://www.karawin.fr)
@@ -279,4 +278,3 @@ void rmt_nec_rx_task()
 	ESP_LOGD(NEC_TAG,"RMT finished");
     vTaskDelete(NULL);
 }
-

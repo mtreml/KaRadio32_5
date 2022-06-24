@@ -388,6 +388,10 @@ void initTimers()
 {
 	event_queue = xQueueCreate(10, sizeof(queue_event_t));	
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+gptimer_handle_t mstimer = NULL;
+gptimer_handle_t sleeptimer = NULL;
+gptimer_handle_t waketimer = NULL;
+
 gptimer_config_t timer_config = {
     .clk_src = GPTIMER_CLK_SRC_APB,
     .direction = GPTIMER_COUNT_DOWN,
@@ -407,6 +411,7 @@ gptimer_alarm_config_t  alarm_config = {
 		.on_alarm = msCallback, // register user callback
 	};
 	ESP_ERROR_CHECK(gptimer_register_event_callbacks(mstimer, &cbs, event_queue));
+	ESP_ERROR_CHECK(gptimer_enable(mstimer));	
 	ESP_ERROR_CHECK(gptimer_start(mstimer));	
 	
 
@@ -520,8 +525,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
 			clientSaveOneHeader("Wifi Connected.",18,METANAME);	
 			vTaskDelay(1000);
 			autoPlay();
-			} // retry
-		else wifiInitDone = true;		break;
+		} // retry
+		else 
+		{
+			wifiInitDone = true;		
+		}
+		break;
 
     case IP_EVENT_STA_GOT_IP:
 		FlashOn = 5;FlashOff = 395;
@@ -810,7 +819,7 @@ void start_network(){
 		else
 		{
 			ESP_ERROR_CHECK(esp_netif_set_ip_info(sta, &info));
-			dns_clear_servers(false);
+			dns_clear_cache();
 			IP_SET_TYPE((( ip_addr_t* )&info.gw), IPADDR_TYPE_V4); // mandatory
 //			(( ip_addr_t* )&info.gw)->type = IPADDR_TYPE_V4;
 			dns_setserver(0,( ip_addr_t* ) &info.gw);

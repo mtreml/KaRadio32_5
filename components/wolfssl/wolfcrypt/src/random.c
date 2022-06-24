@@ -2370,6 +2370,7 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
 #elif defined(WOLFSSL_ESPIDF)
     #if defined(WOLFSSL_ESPWROOM32) || defined(WOLFSSL_ESPWROOM32SE)
         #include <esp_system.h>
+		#include "esp_random.h"
 
         int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
         {
@@ -2379,7 +2380,7 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
                 if (sz < len)
                     len = sz;
                 /* Get one random 32-bit word from hw RNG */
-                rand = esp_random( );
+				rand = esp_random();
                 XMEMCPY(output, &rand, len);
                 output += len;
                 sz -= len;

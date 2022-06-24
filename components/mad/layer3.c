@@ -1648,7 +1648,7 @@ void fastsdct(mad_fixed_t const x[9], mad_fixed_t y[18])
 }
 
 static inline
-void sdctII(mad_fixed_t const x[18], mad_fixed_t X[18])
+void sdctII(mad_fixed_t const x[18], mad_fixed_t X[36])
 {
   mad_fixed_t tmp[9];
   int i;
@@ -1670,17 +1670,18 @@ void sdctII(mad_fixed_t const x[18], mad_fixed_t X[18])
     tmp[i + 2] = x[i + 2] + x[18 - (i + 2) - 1];
   }
 
-  fastsdct(tmp, &X[0]);
+  fastsdct(tmp, X);
 
   /* odd input butterfly and scaling */
 
-  for (i = 0; i < 9; i += 3) {
+  for (i = 0; i < 9; i += 3) 
+  {
     tmp[i + 0] = mad_f_mul(x[i + 0] - x[18 - (i + 0) - 1], scale[i + 0]);
     tmp[i + 1] = mad_f_mul(x[i + 1] - x[18 - (i + 1) - 1], scale[i + 1]);
     tmp[i + 2] = mad_f_mul(x[i + 2] - x[18 - (i + 2) - 1], scale[i + 2]);
   }
 
-  fastsdct(tmp, &X[1]);
+  fastsdct(tmp, X);
 
   /* output accumulation */
 
@@ -1739,7 +1740,8 @@ void dctIV(mad_fixed_t const y[18], mad_fixed_t X[18])
 static inline
 void imdct36(mad_fixed_t const x[18], mad_fixed_t y[36])
 {
-  mad_fixed_t tmp[18];
+  mad_fixed_t tmp[18] = {0, 0, 0, 0, 0, 0, 0, 0, 0,
+						 0, 0, 0, 0, 0, 0, 0, 0, 0};
   int i;
 
   /* DCT-IV */
@@ -2073,42 +2075,44 @@ void III_imdct_l(mad_fixed_t const X[18], mad_fixed_t z[36],
 
   /* windowing */
 
-  switch (block_type) {
-  case 0:  /* normal window */
+  switch (block_type) 
+  {
+	case 0:  /* normal window */
 # if defined(ASO_INTERLEAVE1)
-    {
       register mad_fixed_t tmp1, tmp2;
 
       tmp1 = window_l[0];
       tmp2 = window_l[1];
 
-      for (i = 0; i < 34; i += 2) {
-	z[i + 0] = mad_f_mul(z[i + 0], tmp1);
-	tmp1 = window_l[i + 2];
-	z[i + 1] = mad_f_mul(z[i + 1], tmp2);
-	tmp2 = window_l[i + 3];
+      for (i = 0; i < 34; i += 2) 
+	  {
+		z[i + 0] = mad_f_mul(z[i + 0], tmp1);
+		tmp1 = window_l[i + 2];
+		z[i + 1] = mad_f_mul(z[i + 1], tmp2);
+		tmp2 = window_l[i + 3];
       }
 
       z[34] = mad_f_mul(z[34], tmp1);
       z[35] = mad_f_mul(z[35], tmp2);
-    }
+
 # elif defined(ASO_INTERLEAVE2)
-    {
       register mad_fixed_t tmp1, tmp2;
 
       tmp1 = z[0];
       tmp2 = window_l[0];
 
-      for (i = 0; i < 35; ++i) {
-	z[i] = mad_f_mul(tmp1, tmp2);
-	tmp1 = z[i + 1];
-	tmp2 = window_l[i + 1];
+      for (i = 0; i < 35; ++i) 
+	  {
+		z[i] = mad_f_mul(tmp1, tmp2);
+		tmp1 = z[i + 1];
+		tmp2 = window_l[i + 1];
       }
 
       z[35] = mad_f_mul(tmp1, tmp2);
-    }
-# elif 1
-    for (i = 0; i < 36; i += 4) {
+ 
+ # elif 1
+    for (i = 0; i < 36; i += 4) 
+	{
       z[i + 0] = mad_f_mul(z[i + 0], window_l[i + 0]);
       z[i + 1] = mad_f_mul(z[i + 1], window_l[i + 1]);
       z[i + 2] = mad_f_mul(z[i + 2], window_l[i + 2]);
@@ -2120,7 +2124,8 @@ void III_imdct_l(mad_fixed_t const X[18], mad_fixed_t z[36],
     break;
 
   case 1:  /* start block */
-    for (i =  0; i < 18; i += 3) {
+    for (i =  0; i < 18; i += 3) 
+	{
       z[i + 0] = mad_f_mul(z[i + 0], window_l[i + 0]);
       z[i + 1] = mad_f_mul(z[i + 1], window_l[i + 1]);
       z[i + 2] = mad_f_mul(z[i + 2], window_l[i + 2]);

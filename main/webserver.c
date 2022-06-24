@@ -942,6 +942,10 @@ static void handlePOST(char* name, char* data, int data_size, int conn) {
 			uint8_t macaddr[10]; // = inmalloc(10*sizeof(uint8_t));
 			char macstr[20]; // = inmalloc(20*sizeof(char));
 			char adhcp[4],adhcp2[4];
+			
+			#define MAC2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
+			#define MACSTR "%02x:%02x:%02x:%02x:%02x:%02x"
+			
 			esp_wifi_get_mac(WIFI_IF_STA,macaddr);
 			
 			int json_length ;

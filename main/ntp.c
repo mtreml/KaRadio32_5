@@ -8,103 +8,52 @@
 #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #define TAG "NTP"
 //
-#include <stdio.h>
-#include <stdarg.h>
 #include <string.h>
-#include <stdlib.h>
-//#include <zlib.h>
-#include "lwip/sockets.h"
-#include "lwip/api.h"
-#include "lwip/netdb.h"
+#include <time.h>
+#include <sys/time.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_system.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "esp_attr.h"
+#include "esp_sleep.h"
+#include "nvs_flash.h"
+#include "esp_sntp.h"
 
 #include "ntp.h"
 #include "interface.h"
 
+
+static void initialize_sntp(void);
+void time_sync_notification_cb(struct timeval *tv);
+
 // list of major public servers http://tf.nist.gov/tf-cgi/servers.cgi
-//time.nist.gov 
-
-
-// A task if needed
-/*
-void ntpTask(void *pvParams) {
-
-	while (1)
-	{
-		vTaskDelay(60000);
-		ntp_get_time();
-	}	
-}
-*/
 // get ntp time and return an allocated tm struct (UTC)
-bool ntp_get_time(struct tm **dt) {
-	struct timeval timeout; 
-    timeout.tv_usec = 0;
-	timeout.tv_sec = 5; 
-	int sockfd = 0;
-	ntp_t* ntp;
-	char *msg;
-	int rv;
-	char service[] = {"123"}; //ntp port
-	char node[] = {"pool.ntp.org"}; // this one is universel
-    struct addrinfo hints, *servinfo = NULL, *p = NULL;
-//	struct tm *dt;
-	time_t timestamp;
-//	int8_t tz;
+bool ntp_get_time(struct tm **_dt) 
+{
+    sntp_servermode_dhcp(1);      // accept NTP offers from DHCP server, if any
 	
-	msg = kcalloc(sizeof(ntp_t),1);
-	if (msg == NULL){
-		ESP_LOGE(TAG,"##SYS.DATE#: ntp fails on kcalloc");
-		return false;
-	} 
-	// build the message to send
-	ntp = (ntp_t*)msg;
-	ntp->options = 0x1B; //3 first flags set in binary: 00 001 011  LI=0 VN=3 MODE=CLIENT
-	ntp->stratum = 0;
-	ntp->poll = 6;
-	ntp->precision = 1;
-//	ntp->ref_id = 0x4C4F434C; // LOCL
+	initialize_sntp();
 
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_DGRAM; // Use UDP
-	if ((rv = getaddrinfo(node, service, &hints, &servinfo)) != 0) {
-		//ESP_LOGE(TAG,"##SYS.DATE#: ntp fails on %s %d","getaddrinfo",rv);
-		free(msg);
-		return false;
-	} 		
-// loop in result socket
-	for (p = servinfo; p != NULL; p = p->ai_next) {
-		if ((sockfd = socket(p->ai_family, p->ai_socktype,p->ai_protocol)) == -1) {
-			ESP_LOGE(TAG,"##SYS.DATE#: ntp fails on %s %d","sockfd",sockfd);
-			continue;
-		}
-		break;
-	}
-// set a timeout for recvfrom
-	if (setsockopt (sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0){
-		ESP_LOGE(TAG,"##SYS.DATE#: ntp fails on %s %d","setsockopt",0);	free (msg);freeaddrinfo(servinfo);	close(sockfd);
-		return false;
-	} 	
-//send the request	
-	if ((rv = sendto(sockfd, msg, sizeof(ntp_t), 0,p->ai_addr, p->ai_addrlen)) == -1) {
-		ESP_LOGE(TAG,"##SYS.DATE#: ntp fails on %s %d","sendto",rv); free (msg);freeaddrinfo(servinfo);	close(sockfd);
-		return false;					
-	}
-	freeaddrinfo(servinfo);	
- 	if ((rv = recvfrom(sockfd, msg, sizeof(ntp_t) , 0,NULL, NULL)) <=0) {
-		ESP_LOGE(TAG,"##SYS.DATE#: ntp fails on %s %d","recvfrom",rv);free(msg);close(sockfd);
-		return false;	
-	}	
-			
-	//extract time
-	ntp = (ntp_t*)msg;	
-	timestamp = ntp->trans_time[0] << 24 | ntp->trans_time[1] << 16 |ntp->trans_time[2] << 8 | ntp->trans_time[3];
+    // wait for time to be set
+    time_t now = 0;
+    struct tm dt = { 0 };
+    int retry = 0;
+    const int retry_count = 3;
+    while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET && ++retry < retry_count) {
+        ESP_LOGI(TAG, "Waiting for system time to be set... (%d/%d)", retry, retry_count);
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+    }
+    time(&now);
+    localtime_r(&now, &dt);
+	sntp_stop();
+	
 	// convert to unix time
-	timestamp -= 2208988800UL;
+	ESP_LOGI(TAG,"Timestamp: %d",now);
 	// create tm struct
-	*dt = gmtime(&timestamp);
-	free(msg);
-	close(sockfd);
+	*_dt = gmtime(&now);
 	return true;
 }
 
@@ -128,4 +77,44 @@ void ntp_print_time() {
 			kprintf("##SYS.DATE#: %s%03d:00\n",msg,tz);
 	}
 		
+}
+
+static void initialize_sntp(void)
+{
+    ESP_LOGI(TAG, "Initializing SNTP");
+    sntp_setoperatingmode(SNTP_OPMODE_POLL);
+
+/*
+ * If 'NTP over DHCP' is enabled, we set dynamic pool address
+ * as a 'secondary' server. It will act as a fallback server in case that address
+ * provided via NTP over DHCP is not accessible
+ */
+	sntp_stop();
+	
+	sntp_setservername(0, "ru.pool.ntp.org");
+
+	sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
+
+	sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+
+	sntp_init();
+    ESP_LOGI(TAG, "List of configured NTP servers:");
+
+    for (uint8_t i = 0; i < 1; ++i){
+        if (sntp_getservername(i)){
+            ESP_LOGI(TAG, "server %d: %s", i, sntp_getservername(i));
+        } else {
+            // we have either IPv4 or IPv6 address, let's print it
+            char buff[15];
+            ip_addr_t const *ip = sntp_getserver(i);
+            if (ipaddr_ntoa_r(ip, buff, 15) != NULL)
+                ESP_LOGI(TAG, "server %d: %s", i, buff);
+        }
+    }
+
+}
+
+void time_sync_notification_cb(struct timeval *tv)
+{
+    ESP_LOGI(TAG, "Notification of a time synchronization event");
 }

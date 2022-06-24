@@ -33,7 +33,11 @@
 #include "esp_system.h"
 #include "mdns.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+
 #include "esp_wifi.h"
+#include "esp_netif.h"
 
 const char parslashquote[] = {"(\""};
 const char parquoteslash[] = {"\")"};
@@ -148,6 +152,21 @@ help: this command\n\
 A command error display:\n\
 ##CMD_ERROR#\n\r"\
 }; 
+
+typedef struct {
+    struct arg_str *ssid;
+    struct arg_str *password;
+    struct arg_end *end;
+} wifi_args_t;
+
+typedef struct {
+    struct arg_str *ssid;
+    struct arg_end *end;
+} wifi_scan_arg_t;
+
+static EventGroupHandle_t wifi_event_group;
+static esp_netif_t *sta_netif = NULL;
+static esp_netif_t *ap_netif = NULL;
 
 uint16_t currentStation = 0;
 static gpio_num_t led_gpio = GPIO_NONE;
@@ -411,10 +430,27 @@ void wifiDisconnect()
 
 void wifiStatus()
 {
-	tcpip_adapter_ip_info_t ipi;	
-	tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ipi);
+    const int CONNECTED_BIT = BIT0;
+    int bits = xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, 0, 1, 0);
+    esp_netif_t *ifx = ap_netif;
+    esp_netif_ip_info_t ipi;
+    wifi_mode_t mode;
+
+    esp_wifi_get_mode(&mode);
+    if (WIFI_MODE_STA == mode) {
+        bits = xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, 0, 1, 0);
+        if (bits & CONNECTED_BIT) {
+            ifx = sta_netif;
+        } else {
+            ESP_LOGE(TAG, "sta has no IP");
+            return;
+        }
+    }
+
+    esp_netif_get_ip_info(ifx, &ipi);
+
 	kprintf(stritWIFISTATUS,
-			  (ipi.ip.addr&0xff), ((ipi.ip.addr>>8)&0xff), ((ipi.ip.addr>>16)&0xff), ((ipi.ip.addr>>24)&0xff),
+			 (ipi.ip.addr&0xff), ((ipi.ip.addr>>8)&0xff), ((ipi.ip.addr>>16)&0xff), ((ipi.ip.addr>>24)&0xff),
 			 (ipi.netmask.addr&0xff), ((ipi.netmask.addr>>8)&0xff), ((ipi.netmask.addr>>16)&0xff), ((ipi.netmask.addr>>24)&0xff),
 			 (ipi.gw.addr&0xff), ((ipi.gw.addr>>8)&0xff), ((ipi.gw.addr>>16)&0xff), ((ipi.gw.addr>>24)&0xff));
 }

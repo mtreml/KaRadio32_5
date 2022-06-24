@@ -17,6 +17,7 @@
 #include <freertos/task.h>
 #include <driver/dac.h>
 #include "driver/gpio.h"
+#include "esp_chip_info.h"
 #include "gpio.h"
 #include "app_main.h"
 #include "MerusAudio.h"
@@ -436,13 +437,10 @@ static void  render_spdif_samples(const void *buf, uint32_t buf_len, pcm_format_
 // Decoded frame
 void IRAM_ATTR render_samples(char *buf, uint32_t buf_len, pcm_format_t *buf_desc)
 {
-    if(renderer_status != RUNNING)
-        return;
+    if(renderer_status != RUNNING) return;
 
-	if(renderer_instance->output_mode == SPDIF)
-		render_spdif_samples(buf, buf_len, buf_desc);
-	else
-		render_i2s_samples(buf, buf_len, buf_desc);
+	if(renderer_instance->output_mode == SPDIF) render_spdif_samples(buf, buf_len, buf_desc);
+	else render_i2s_samples(buf, buf_len, buf_desc);
 }
 
 void  renderer_zero_dma_buffer()
@@ -515,7 +513,7 @@ bool  init_i2s(/*renderer_config_t *config*/)
 #else	
     i2s_comm_format_t comm_fmt = I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB ;
 #endif	
-		i2s_bits_per_sample_t bit_depth = config->bit_depth;
+	i2s_bits_per_sample_t bit_depth = config->bit_depth;
 	int sample_rate = config->sample_rate;
     int use_apll = 0;
 	esp_chip_info_t out_info;
