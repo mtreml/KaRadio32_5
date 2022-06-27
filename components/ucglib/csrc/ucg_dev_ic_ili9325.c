@@ -155,89 +155,8 @@ static ucg_int_t ucg_handle_ili9325_l90fx(ucg_t *ucg)
   
 */
 
-static const ucg_pgm_uint8_t ucg_ili9325_set_x_pos_seq[] = 
-{
-  UCG_C10(0x020),	UCG_VARX(0,0x00, 0), UCG_VARX(0,0x0ff, 0),					/* set x position */
-  UCG_C10(0x022),							/* write to RAM */
-  UCG_DATA(),								/* change to data mode */
-  UCG_END()
-};
-
-static const ucg_pgm_uint8_t ucg_ili9325_set_y_pos_seq[] = 
-{
-  UCG_C10(0x021),	UCG_VARY(8,0x01, 0), UCG_VARY(0,0x0ff, 0),		/* set y position */
-  UCG_C10(0x022),							/* write to RAM */
-  UCG_DATA(),								/* change to data mode */
-  UCG_END()
-};
-
-/* without CmdDataSequence */ 
-ucg_int_t xxxxxx_ucg_handle_ili9325_l90tc(ucg_t *ucg)
-{
-  if ( ucg_clip_l90tc(ucg) != 0 )
-  {
-    uint8_t buf[3];
-    ucg_int_t dx, dy;
-    ucg_int_t i;
-    const uint8_t *seq;
-    unsigned char pixmap;
-    uint8_t bitcnt;
-    ucg_com_SetCSLineStatus(ucg, 0);		/* enable chip */
-    ucg_com_SendCmdSeq(ucg, ucg_ili9325_set_pos_seq);	
-    switch(ucg->arg.dir)
-    {
-      case 0: 
-	dx = 1; dy = 0; 
-	seq = ucg_ili9325_set_x_pos_seq;
-	break;
-      case 1: 
-	dx = 0; dy = 1; 
-	seq = ucg_ili9325_set_y_pos_seq;
-	break;
-      case 2: 
-	dx = -1; dy = 0; 
-	seq = ucg_ili9325_set_x_pos_seq;
-	break;
-      case 3: 
-      default:
-	dx = 0; dy = -1; 
-	seq = ucg_ili9325_set_y_pos_seq;
-	break;
-    }
-    pixmap = ucg_pgm_read(ucg->arg.bitmap);
-    bitcnt = ucg->arg.pixel_skip;
-    pixmap <<= bitcnt;
-    buf[0] = ucg->arg.pixel.rgb.color[0];
-    buf[1] = ucg->arg.pixel.rgb.color[1];
-    buf[2] = ucg->arg.pixel.rgb.color[2];
-    //ucg_com_SetCSLineStatus(ucg, 0);		/* enable chip */
-    
-    for( i = 0; i < ucg->arg.len; i++ )
-    {
-      if ( (pixmap & 128) != 0 )
-      {
-	ucg_com_SendCmdSeq(ucg, seq);	
-	ucg_com_SendRepeat3Bytes(ucg, 1, buf);
-      }
-      pixmap<<=1;
-      ucg->arg.pixel.pos.x+=dx;
-      ucg->arg.pixel.pos.y+=dy;
-      bitcnt++;
-      if ( bitcnt >= 8 )
-      {
-	ucg->arg.bitmap++;
-	pixmap = ucg_pgm_read(ucg->arg.bitmap);
-	bitcnt = 0;
-      }
-    }
-    ucg_com_SetCSLineStatus(ucg, 1);		/* disable chip */
-    return 1;
-  }
-  return 0;
-}
-
-
 /* with CmdDataSequence */ 
+#ifdef UCG_MSG_DRAW_L90TC
 static ucg_int_t ucg_handle_ili9325_l90tc(ucg_t *ucg)
 {
   if ( ucg_clip_l90tc(ucg) != 0 )
@@ -366,7 +285,7 @@ static ucg_int_t ucg_handle_ili9325_l90tc(ucg_t *ucg)
   }
   return 0;
 }
-
+#endif
 
 static ucg_int_t ucg_handle_ili9325_l90se(ucg_t *ucg)
 {

@@ -293,7 +293,7 @@ amm-info@iis.fraunhofer.de
 #else
 #ifndef FORCEINLINE
   #if defined(__GNUC__)	/* cppp replaced: elif */
-    #define FORCEINLINE inline __attribute((always_inline))
+    #define FORCEINLINE __attribute((always_inline))
   #else
     #define FORCEINLINE
   #endif
@@ -301,7 +301,7 @@ amm-info@iis.fraunhofer.de
 #endif
 
   /* for all other platforms */
-  #define FDK_INLINE inline
+  #define FDK_INLINE   __attribute__((always_inline)) inline
 
 
 /*!

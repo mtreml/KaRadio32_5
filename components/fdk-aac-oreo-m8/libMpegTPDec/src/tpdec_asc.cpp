@@ -118,7 +118,9 @@ int  CProgramConfig_IsValid ( const CProgramConfig *pPce )
 
 /*
  * Read the extension for height info.
- * return 0 if successfull or -1 if the CRC failed.
+ * return 0 if successfull,
+ *       -1 if the CRC failed,
+ *       -2 if invalid HeightInfo.
  */
 static
 int CProgramConfig_ReadHeightExt(
@@ -146,15 +148,21 @@ int CProgramConfig_ReadHeightExt(
 
     for (i=0; i < pPce->NumFrontChannelElements; i++)
     {
-      pPce->FrontElementHeightInfo[i] = (UCHAR) FDKreadBits(bs,2);
+      if ((pPce->FrontElementHeightInfo[i] = (UCHAR) FDKreadBits(bs,2)) >= PC_NUM_HEIGHT_LAYER) {
+        err = -2; /* height information is out of the valid range */
+      }
     }
     for (i=0; i < pPce->NumSideChannelElements; i++)
     {
-      pPce->SideElementHeightInfo[i] = (UCHAR) FDKreadBits(bs,2);
+      if ((pPce->SideElementHeightInfo[i] = (UCHAR) FDKreadBits(bs,2)) >= PC_NUM_HEIGHT_LAYER) {
+        err = -2; /* height information is out of the valid range */
+      }
     }
     for (i=0; i < pPce->NumBackChannelElements; i++)
     {
-      pPce->BackElementHeightInfo[i] = (UCHAR) FDKreadBits(bs,2);
+      if ((pPce->BackElementHeightInfo[i] = (UCHAR) FDKreadBits(bs,2)) >= PC_NUM_HEIGHT_LAYER) {
+        err = -2; /* height information is out of the valid range */
+      }
     }
     FDKbyteAlign(bs, alignmentAnchor);
 
@@ -162,6 +170,13 @@ int CProgramConfig_ReadHeightExt(
     if ((USHORT)FDKreadBits(bs,8) != FDKcrcGetCRC(&crcInfo)) {
       /* CRC failed */
       err = -1;
+    }
+    if (err!=0) {
+      /* Reset whole height information in case an error occured during parsing. The return
+         value ensures that pPce->isValid is set to 0 and implicit channel mapping is used. */
+      FDKmemclear(pPce->FrontElementHeightInfo, sizeof(pPce->FrontElementHeightInfo));
+      FDKmemclear(pPce->SideElementHeightInfo, sizeof(pPce->SideElementHeightInfo));
+      FDKmemclear(pPce->BackElementHeightInfo, sizeof(pPce->BackElementHeightInfo));
     }
   }
   else {
@@ -389,6 +404,7 @@ void CProgramConfig_GetDefault( CProgramConfig *pPce,
     pPce->BackElementIsCpe[1]      = 1;
     pPce->NumChannels             += 1;
     pPce->NumEffectiveChannels    += 1;
+    /*fall through*/
   case 11:  /* 3/0/3.1ch */
     pPce->NumFrontChannelElements += 2;
     pPce->FrontElementIsCpe[0]     = 0;
@@ -404,25 +420,30 @@ void CProgramConfig_GetDefault( CProgramConfig *pPce,
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   case 14:  /* 2/0/0-3/0/2-0.1ch front height */
     pPce->FrontElementHeightInfo[2] = 1;      /* Top speaker */
+    /*fall through*/
   case 7:   /* 5/0/2.1ch front */
     pPce->NumFrontChannelElements += 1;
     pPce->FrontElementIsCpe[2]     = 1;
     pPce->NumChannels             += 2;
     pPce->NumEffectiveChannels    += 2;
+    /*fall through*/  
   case 6:   /* 3/0/2.1ch */
     pPce->NumLfeChannelElements   += 1;
     pPce->NumChannels             += 1;
+    /*fall through*/
   case 5:   /* 3/0/2.0ch */
   case 4:   /* 3/0/1.0ch */
     pPce->NumBackChannelElements  += 1;
     pPce->BackElementIsCpe[0]      = (channelConfig>4) ? 1 : 0;
     pPce->NumChannels             += (channelConfig>4) ? 2 : 1;
     pPce->NumEffectiveChannels    += (channelConfig>4) ? 2 : 1;
+    /*fall through*/
   case 3:   /* 3/0/0.0ch */
     pPce->NumFrontChannelElements += 1;
     pPce->FrontElementIsCpe[1]     = 1;
     pPce->NumChannels             += 2;
     pPce->NumEffectiveChannels    += 2;
+    /*fall through*/
   case 1:   /* 1/0/0.0ch */
     pPce->NumFrontChannelElements += 1;
     pPce->FrontElementIsCpe[0]     = 0;
@@ -646,7 +667,8 @@ int CProgramConfig_LookupElement(
       {
       case ID_CPE:
         isCpe = 1;
-      case ID_SCE:
+        /*fall through*/
+	  case ID_SCE:
         /* search in front channels */
         for (i = 0; i < pPce->NumFrontChannelElements; i++) {
           int heightLayer = pPce->FrontElementHeightInfo[i];
@@ -1071,16 +1093,18 @@ static INT ld_sbr_header( const CSAudioSpecificConfig *asc,
     case 12:
     case 7:
       error |= cb->cbSbr(cb->cbSbrData, hBs, asc->m_samplingFrequency, asc->m_extensionSamplingFrequency, asc->m_samplesPerFrame, AOT_ER_AAC_ELD, ID_CPE, i++);
-    case 6:
+    /*fall through*/
+	case 6:
     case 5:
       error |= cb->cbSbr(cb->cbSbrData, hBs, asc->m_samplingFrequency, asc->m_extensionSamplingFrequency, asc->m_samplesPerFrame, AOT_ER_AAC_ELD, ID_CPE, i++);
-    case 3:
+    /*fall through*/
+	case 3:
       error |= cb->cbSbr(cb->cbSbrData, hBs, asc->m_samplingFrequency, asc->m_extensionSamplingFrequency, asc->m_samplesPerFrame, AOT_ER_AAC_ELD, ID_CPE, i++);
-      break;
-
+    break;
     case 11:
       error |= cb->cbSbr(cb->cbSbrData, hBs, asc->m_samplingFrequency, asc->m_extensionSamplingFrequency, asc->m_samplesPerFrame, AOT_ER_AAC_ELD, ID_CPE, i++);
-    case 4:
+    /*fall through*/
+	case 4:
       error |= cb->cbSbr(cb->cbSbrData, hBs, asc->m_samplingFrequency, asc->m_extensionSamplingFrequency, asc->m_samplesPerFrame, AOT_ER_AAC_ELD, ID_CPE, i++);
       error |= cb->cbSbr(cb->cbSbrData, hBs, asc->m_samplingFrequency, asc->m_extensionSamplingFrequency, asc->m_samplesPerFrame, AOT_ER_AAC_ELD, ID_SCE, i++);
       break;
@@ -1155,7 +1179,6 @@ TRANSPORTDEC_ERROR EldSpecificConfig_Parse(
       /* add future eld extension configs here */
     }
   }
-bail:
   return (ErrorStatus);
 }
 #endif /* TP_ELD_ENABLE */
@@ -1400,7 +1423,7 @@ TRANSPORTDEC_ERROR DrmRawSdcAudioConfig_Parse(
        - coder field         5 bits
        - rfa                 1 bit  */
 
-    int audioCoding, audioMode, cSamplingFreq, coderField, sfIdx, sbrFlag;
+    int audioCoding, audioMode, cSamplingFreq, sfIdx, sbrFlag;
 
     /* Read the SDC field */
     FDKreadBits(bs,4);   /* Short and Stream Id */
@@ -1411,7 +1434,7 @@ TRANSPORTDEC_ERROR DrmRawSdcAudioConfig_Parse(
     cSamplingFreq = FDKreadBits(bs, 3);    /* audio sampling rate */
 
     FDKreadBits(bs, 2);  /* Text and enhancement flag */
-    coderField   = FDKreadBits(bs, 5);
+    FDKreadBits(bs, 5);
     FDKreadBits(bs, 1);  /* rfa */
 
     /* Evaluate configuration and fill the ASC */
@@ -1464,6 +1487,7 @@ TRANSPORTDEC_ERROR DrmRawSdcAudioConfig_Parse(
         switch (audioMode) {
         case 1: /* parametric stereo */
           self->m_psPresentFlag = 1;
+		  /*fall through*/
         case 0: /* mono */
           self->m_channelConfiguration = 1;
           break;

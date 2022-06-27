@@ -348,10 +348,6 @@ Where N equals to CStreamInfo::frameSize .
 
 #include "genericStds.h"
 
-#define AACDECODER_LIB_VL0 2
-#define AACDECODER_LIB_VL1 5
-#define AACDECODER_LIB_VL2 17
-
 /**
  * \brief  AAC decoder error codes.
  */
@@ -608,8 +604,7 @@ extern "C"
  * \param size    Size of the buffer pointed to by buffer.
  * \return        Error code.
  */
-LINKSPEC_H AAC_DECODER_ERROR
-aacDecoder_AncDataInit ( HANDLE_AACDECODER self,
+LINKSPEC_H AAC_DECODER_ERROR aacDecoder_AncDataInit ( HANDLE_AACDECODER self,
                          UCHAR            *buffer,
                          int               size );
 
@@ -622,8 +617,7 @@ aacDecoder_AncDataInit ( HANDLE_AACDECODER self,
  * \param size   Pointer to a buffer receiving the length of the requested ancillary data element.
  * \return       Error code.
  */
-LINKSPEC_H AAC_DECODER_ERROR
-aacDecoder_AncDataGet ( HANDLE_AACDECODER self,
+LINKSPEC_H AAC_DECODER_ERROR aacDecoder_AncDataGet ( HANDLE_AACDECODER self,
                         int               index,
                         UCHAR           **ptr,
                         int              *size );
@@ -636,8 +630,7 @@ aacDecoder_AncDataGet ( HANDLE_AACDECODER self,
  * \param value  Parameter value.
  * \return       Error code.
  */
-LINKSPEC_H AAC_DECODER_ERROR
-aacDecoder_SetParam ( const HANDLE_AACDECODER  self,
+LINKSPEC_H AAC_DECODER_ERROR aacDecoder_SetParam ( const HANDLE_AACDECODER  self,
                       const AACDEC_PARAM       param,
                       const INT                value );
 
@@ -648,8 +641,7 @@ aacDecoder_SetParam ( const HANDLE_AACDECODER  self,
  * \param pFreeBytes Pointer to variable receving amount of free bytes inside decoder internal buffer
  * \return             Error code
  */
-LINKSPEC_H AAC_DECODER_ERROR
-aacDecoder_GetFreeBytes ( const HANDLE_AACDECODER  self,
+LINKSPEC_H AAC_DECODER_ERROR aacDecoder_GetFreeBytes ( const HANDLE_AACDECODER  self,
                                             UINT *pFreeBytes);
 
 /**
@@ -657,8 +649,7 @@ aacDecoder_GetFreeBytes ( const HANDLE_AACDECODER  self,
  * \param transportFmt  The transport type to be used
  * \return              AAC decoder handle
  */
-LINKSPEC_H HANDLE_AACDECODER
-aacDecoder_Open ( TRANSPORT_TYPE transportFmt, UINT nrOfLayers );
+LINKSPEC_H HANDLE_AACDECODER aacDecoder_Open ( TRANSPORT_TYPE transportFmt, UINT nrOfLayers );
 
 /**
  * \brief Explicitly configure the decoder by passing a raw AudioSpecificConfig (ASC) or a StreamMuxConfig (SMC),
@@ -671,8 +662,7 @@ aacDecoder_Open ( TRANSPORT_TYPE transportFmt, UINT nrOfLayers );
  * \param length  Length of the configuration buffer in bytes.
  * \return        Error code.
  */
-LINKSPEC_H AAC_DECODER_ERROR
-aacDecoder_ConfigRaw ( HANDLE_AACDECODER self,
+LINKSPEC_H AAC_DECODER_ERROR aacDecoder_ConfigRaw ( HANDLE_AACDECODER self,
                        UCHAR            *conf[],
                        const UINT        length[] );
 
@@ -696,8 +686,7 @@ aacDecoder_ConfigRaw ( HANDLE_AACDECODER self,
  *                    The value is updated according to the amount of newly copied bytes.
  * \return            Error code.
  */
-LINKSPEC_H AAC_DECODER_ERROR
-aacDecoder_Fill ( HANDLE_AACDECODER  self,
+LINKSPEC_H AAC_DECODER_ERROR aacDecoder_Fill ( HANDLE_AACDECODER  self,
                   UCHAR             *pBuffer[],
                   const UINT         bufferSize[],
                   UINT              *bytesValid );
@@ -723,8 +712,7 @@ aacDecoder_Fill ( HANDLE_AACDECODER  self,
  *                   (flags & AACDEC_INTR) == 4: Input data is discontinuous. Resynchronize any internals as necessary.
  * \return           Error code.
  */
-LINKSPEC_H AAC_DECODER_ERROR
-aacDecoder_DecodeFrame ( HANDLE_AACDECODER  self,
+LINKSPEC_H AAC_DECODER_ERROR aacDecoder_DecodeFrame ( HANDLE_AACDECODER  self,
                          INT_PCM           *pTimeData,
                          const INT          timeDataSize,
                          const UINT         flags );

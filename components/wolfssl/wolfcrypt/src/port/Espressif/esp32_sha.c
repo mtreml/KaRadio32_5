@@ -256,13 +256,13 @@ static void esp_digest_state(WC_ESP32SHA* ctx, byte* hash, enum SHA_TYPE sha_typ
     /* wait until done */
     while(DPORT_REG_READ(SHA_BUSY_REG) == 1){ }
 
-    esp_dport_access_read_buffer((word32*)(hash), SHA_TEXT_BASE,
-                                 esp_sha_digest_size(sha_type)/sizeof(word32));
+    esp_dport_access_read_buffer((uint32_t*)(hash), SHA_TEXT_BASE,
+                                 esp_sha_digest_size(sha_type)/sizeof(uint32_t));
 
 #if defined(WOLFSSL_SHA512) || defined(WOLFSSL_SHA384)
     if(sha_type==SHA2_384||sha_type==SHA2_512) {
-        word32  i;
-        word32* pwrd1 = (word32*)(hash);
+        uint32_t  i;
+        uint32_t* pwrd1 = (uint32_t*)(hash);
         /* swap value */
         for(i = 0; i <WC_SHA512_DIGEST_SIZE/4; i+=2 ) {
             pwrd1[i]  ^= pwrd1[i+1];

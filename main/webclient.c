@@ -1050,84 +1050,80 @@ void clientReceiveCallback(int sockfd, char *pdata, int len)
 			}
 			break;
 		}
+		/*fall through*/
 		//no break here
 	case C_HEADER1:  // not ended
-		{
-			int i = 0;
-			cstatus = C_HEADER1;
-			do {
+		int i = 0;
+		cstatus = C_HEADER1;
+		do {
 				t1 = strstr(pdata, "\r\n\r\n"); // END OF HEADER
 				ESP_LOGV(TAG,"Header1 len: %d,  Header: %s",len,pdata);
 				if ((t1 != NULL) && (t1 <= pdata+len-4))
 				{
-						t2 = strstr(pdata, "Internal Server Error");
-						if (t2 != NULL)
+					t2 = strstr(pdata, "Internal Server Error");
+					if (t2 != NULL)
+					{
+						ESP_LOGV(TAG,"Internal Server Error");
+						clientDisconnect("Internal Server Error");
+						cstatus = C_HEADER;
+					}
+					icyfound = 	clientParseHeader(pdata);
+					if(header.members.single.metaint > 0)
+					{
+						metad = header.members.single.metaint;
+					}
+					ESP_LOGD(TAG,"t1: 0x%x, cstatus: %d, icyfound: %d  metad:%d Metaint:%d\n", (int) t1,cstatus, icyfound,metad,  (header.members.single.metaint));
+					cstatus = C_DATA;	// a stream found
+					setVolumei(1);
+	/////////////////////////////////////////////////////////////////////////////////////////////////
+					player_config->media_stream->eof = false;
+					audio_player_start();
+	/////////////////////////////////////////////////////////////////////////////////////////////////
+
+					t2 = strstr(pdata, "Transfer-Encoding: chunked"); // chunked stream?
+					chunked = 0;
+					t1+= 4;
+					if ( t2 != NULL)
+					{
+						while (len -(t1-pdata)<8) 
 						{
-							ESP_LOGV(TAG,"Internal Server Error");
-							clientDisconnect("Internal Server Error");
-							cstatus = C_HEADER;
-
-						}
-						icyfound = 	clientParseHeader(pdata);
-						if(header.members.single.metaint > 0)
-							metad = header.members.single.metaint;
-						ESP_LOGD(TAG,"t1: 0x%x, cstatus: %d, icyfound: %d  metad:%d Metaint:%d\n", (int) t1,cstatus, icyfound,metad,  (header.members.single.metaint));
-						cstatus = C_DATA;	// a stream found
-						setVolumei(1);
-/////////////////////////////////////////////////////////////////////////////////////////////////
-						player_config->media_stream->eof = false;
-						audio_player_start();
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-						t2 = strstr(pdata, "Transfer-Encoding: chunked"); // chunked stream?
-						chunked = 0;
-						t1+= 4;
-						if ( t2 != NULL)
-						{
-							while (len -(t1-pdata)<8) {
-								vTaskDelay(1);
-								int ilen;
-								if (https)
-								{
-									ilen = wolfSSL_read(ssl, pdata+len, RECEIVE+8-len);
-									if (ilen >0) len += ilen;
-								}
-								else
-								{
-									ilen = recv(sockfd, pdata+len, RECEIVE+8-len, 0); 
-									if (ilen >0) len += ilen; 
-								}
-								if (ilen <0) {clientDisconnect("chunk2");break;}							
+							vTaskDelay(1);
+							int ilen;
+							if (https)
+							{
+								ilen = wolfSSL_read(ssl, pdata+len, RECEIVE+8-len);
+								if (ilen >0) len += ilen;
 							}
-							chunked = (uint32_t) strtol(t1, NULL, 16) +2;
-							if (strchr((t1),0x0A) != NULL)
-								*strchr(t1,0x0A) = 0;
-
-							ESP_LOGD(TAG,"chunked: %d,  strlen: %d  \"%s\"",chunked,strlen(t1)+1,t1);
-							t1 +=strlen(t1)+1; //+1 for char 0,
+							else
+							{
+								ilen = recv(sockfd, pdata+len, RECEIVE+8-len, 0); 
+								if (ilen >0) len += ilen; 
+							}
+							if (ilen <0) {clientDisconnect("chunk2");break;}							
 						}
-
-						int newlen = len - (t1-pdata) ;
-						cchunk = chunked;
-						ESP_LOGD(TAG,"newlen: %d   len: %d   chunked:%d  pdata:%x",newlen,len,chunked,(int)pdata);
-						if(newlen > 0) clientReceiveCallback(sockfd,t1, newlen);
-				} else
+						chunked = (uint32_t) strtol(t1, NULL, 16) +2;
+						if (strchr((t1),0x0A) != NULL){*strchr(t1,0x0A) = 0;}
+						ESP_LOGD(TAG,"chunked: %d,  strlen: %d  \"%s\"",chunked,strlen(t1)+1,t1);
+						t1 +=strlen(t1)+1; //+1 for char 0,
+					}
+					int newlen = len - (t1-pdata) ;
+					cchunk = chunked;
+					ESP_LOGD(TAG,"newlen: %d   len: %d   chunked:%d  pdata:%x",newlen,len,chunked,(int)pdata);
+					if(newlen > 0) clientReceiveCallback(sockfd,t1, newlen);
+				}
+				else
 				{
 					t1 = NULL;
 					if (i++ > 20) {clientDisconnect("header1");break;}
 					vTaskDelay(1); //avoid watchdog is infernal loop
-					
-					if (https)
-						bread = wolfSSL_read(ssl, pdata+len, RECEIVE-len);
-					else
-						bread = recvfrom(sockfd, pdata+len, RECEIVE-len, 0, NULL, NULL);					
+
+					if (https) bread = wolfSSL_read(ssl, pdata+len, RECEIVE-len);
+					else bread = recvfrom(sockfd, pdata+len, RECEIVE-len, 0, NULL, NULL);					
 					if (bread <0) {clientDisconnect("header11");break;}
 					if (bread >0) len += bread;
 				}
 			} while (t1 == NULL);
-		}
-	break;
+		break;
 	default:
 // -----------
 //ESP_LOGD(TAG,"LenIn: %d",len);
@@ -1141,7 +1137,8 @@ void clientReceiveCallback(int sockfd, char *pdata, int len)
 				 len -=1;
 				 cchunk = 0;
 //				 ESP_LOGD(TAG,"Len00: %d  cchunk: %d",len,cchunk);
-			} else
+			} 
+			else
 			{
 //	 printf("CDATA1: chunked: %d, cchunk: %d, len: %d\n",chunked,cchunk,len);
 				if (len == cchunk) // if a complete chunk in pdata, remove crlf
@@ -1150,7 +1147,8 @@ void clientReceiveCallback(int sockfd, char *pdata, int len)
 					cchunk = 0;
 //					ESP_LOGD(TAG,"Len0: %d  cchunk: %d",len,cchunk);
 //	printf("lenoe:%d, chunked:%d  cchunk:%d, lc:%d, metad:%d\n",len,chunked,cchunk, lc,metad );
-				} else  // an incomplete chunk in progress
+				} 
+				else  // an incomplete chunk in progress
 				{
 					if (len == cchunk-1) // missing lf: remove cr only, wait lf in next data
 					{
@@ -1202,7 +1200,8 @@ void clientReceiveCallback(int sockfd, char *pdata, int len)
 								//if (len <0) ESP_LOGD(TAG,"Len2: %d",len);
 //	printf("memcpy1 at %x from %x, lc:%d\n",inpdata+cchunk-2,pdata+len-lc,lc);
 							}
-							else{
+							else
+							{
 								memcpy (inpdata,inpdata+cchunk+clen, lc);
 //	printf("lenm:%d, inpdata:%x, chunked:%d  cchunk:%d, lc:%d\n",len,inpdata,chunked,cchunk, lc);
 								len -= (clen + cchunk);
@@ -1241,10 +1240,8 @@ void clientReceiveCallback(int sockfd, char *pdata, int len)
 		{
 			ESP_LOGD(TAG,"clientReceiveCallback: pdata: %x, pdataend: %x, len: %d",(int)pdata,(int)pdata+len,len);
 			ESP_LOGD(TAG,"Negative enter len= %d, metad= %d  rest= %d   pdata= %x :\"%s\"",len,metad,rest,(int)pdata,pdata);
-			if (len>-rest)
-				*(pdata-rest) = 0; //truncated
-			else
-				*(pdata+len) = 0; //truncated
+			if (len>-rest) *(pdata-rest) = 0; //truncated
+			else *(pdata+len) = 0; //truncated
 			if (metadata != NULL) strcat(metadata,pdata);
 			if (len >= -rest)
 			{
@@ -1315,11 +1312,11 @@ ESP_LOGD(TAG,"mtlen len:%d, clen:%d, metad:%d, l:%d, inpdata:%x,  rest:%d",len,c
 				}
 				metad  = header.members.single.metaint;
 				inpdata = inpdata+clen-rest;
-if (rest <0) ESP_LOGD(TAG,"mt1 len:%d, clen:%d, metad:%d, l:%d, inpdata:%x,  rest:%d",len,clen,metad, l,(int)inpdata,rest );
+				if (rest <0) ESP_LOGD(TAG,"mt1 len:%d, clen:%d, metad:%d, l:%d, inpdata:%x,  rest:%d",len,clen,metad, l,(int)inpdata,rest );
 				clen = rest;
 				if (rest <0)
 				{
-ESP_LOGD(TAG,"mt2 len:%d, clen:%d, metad:%d, l:%d, inpdata:%x,  rest:%d",len,clen,metad, l,(int)inpdata,rest );
+					ESP_LOGD(TAG,"mt2 len:%d, clen:%d, metad:%d, l:%d, inpdata:%x,  rest:%d",len,clen,metad, l,(int)inpdata,rest );
 					clen = 0;
 					break;
 				}
@@ -1343,7 +1340,8 @@ ESP_LOGD(TAG,"mt2 len:%d, clen:%d, metad:%d, l:%d, inpdata:%x,  rest:%d",len,cle
 				rest = 0;
 			}
 //ESP_LOGD(TAG,"metaout len:%d, clen:%d, metad:%d, l:%d, inpdata:%x, rest:%d",len,clen,metad, l,(int)inpdata,rest );
-		} else
+		} 
+		else
 		{
 
 			if (header.members.single.metaint != 0) metad -= len;
@@ -1376,17 +1374,16 @@ ESP_LOGD(TAG,"mt2 len:%d, clen:%d, metad:%d, l:%d, inpdata:%x,  rest:%d",len,cle
 	} // switch
 }
 
-
-
 uint8_t bufrec[RECEIVE+20];
-    /* declare wolfSSL objects */
-    WOLFSSL_CTX *wctx;
-    WOLFSSL *ssl;
 
-void wolfSSL_log_function(const int logLevel, const char *const logMessage){
+/* declare wolfSSL objects */
+WOLFSSL_CTX *wctx;
+WOLFSSL *ssl;
+
+void wolfSSL_log_function(const int logLevel, const char *const logMessage)
+{
 //    ESP_LOGD(TAG,"WOLFSSL:%s\n",logMessage);
-if (logLevel <= wolfSSL_getLogState())
-	kprintf("WOLFSSL:%d %s\n",logLevel,logMessage);
+	if (logLevel <= wolfSSL_getLogState())	kprintf("WOLFSSL:%d %s\n",logLevel,logMessage);
 }
 
 uint8_t wolfSSL_getLogState()
@@ -1416,16 +1413,20 @@ void clientTask(void *pvParams) {
 	/* Initialize wolfSSL */
 //	wolfSSL_getLogState()?wolfSSL_Debugging_ON():wolfSSL_Debugging_OFF();
 	wolfSSL_Debugging_ON();
-	if (wolfSSL_Init() != WOLFSSL_SUCCESS) {
-		ESP_LOGE(TAG,"Failed to init WOLFSSL");}
+	if (wolfSSL_Init() != WOLFSSL_SUCCESS) 
+	{
+		ESP_LOGE(TAG,"Failed to init WOLFSSL");
+	}
 	/* Create and initialize WOLFSSL_CTX */
-	if ((wctx = wolfSSL_CTX_new(wolfSSLv23_client_method())) == NULL) {
+	if ((wctx = wolfSSL_CTX_new(wolfSSLv23_client_method())) == NULL) 
+	{
 		ESP_LOGE(TAG,"Failed to create WOLFSSL_CTX");
 	}
     wolfSSL_SetLoggingCb(wolfSSL_log_function);	
 	/* Load client certificates into WOLFSSL_CTX */
 	if ((ret = wolfSSL_CTX_load_verify_buffer(wctx, client_cert_der_1024,
-		sizeof_client_cert_der_1024, WOLFSSL_FILETYPE_ASN1)) != SSL_SUCCESS) {
+		sizeof_client_cert_der_1024, WOLFSSL_FILETYPE_ASN1)) != SSL_SUCCESS) 
+	{
 		ESP_LOGE(TAG,"Failed to load %d, please check the file.",ret);
 	}
 	/* not peer check */
@@ -1436,7 +1437,8 @@ void clientTask(void *pvParams) {
 //	uxHighWaterMark = uxTaskGetStackHighWaterMark( NULL );
 //	printf("watermark webclient:%d  heap:%d\n",uxHighWaterMark,xPortGetFreeHeapSize( ));
 
-	while(1) {
+	while(1) 
+	{
 		xSemaphoreGive(sConnected);
 		if(xSemaphoreTake(sConnect, portMAX_DELAY)) 
 		{		
@@ -1582,7 +1584,8 @@ void clientTask(void *pvParams) {
 					{ clearHeaders(); break;}
 				}
 				while (( bytes_read > 0 )||(playing && (bytes_read == 0)));
-			} else
+			} 
+			else
 			{
 				NotConnected:
 				ESP_LOGE(TAG,"Socket: %d  connect errno:%d ",sockfd,errno);
@@ -1591,7 +1594,8 @@ void clientTask(void *pvParams) {
 				shutdown(sockfd,SHUT_RDWR); // stop the socket
 				vTaskDelay(1);
 				clientDisconnect("Invalid");
-				if (https){
+				if (https)
+				{
 					if (ssl) wolfSSL_free(ssl);     /* Free the wolfSSL object */
 					ESP_LOGI(TAG,"SSL Cleanup Socket: %d",sockfd);
 				}
@@ -1610,7 +1614,8 @@ void clientTask(void *pvParams) {
 					}
 					else if ((!playing)&&(once == 1)){ // nothing played. Force the read of the buffer
 						// some data not played
-						if ((!playing )&& (spiRamFifoFill())) {
+						if ((!playing )&& (spiRamFifoFill())) 
+						{
 							playing=1;
 							vTaskDelay(1);
 							setVolumei(getVolume());
@@ -1622,13 +1627,15 @@ void clientTask(void *pvParams) {
 						}
 					}
 						//
-					else if ((!playing)&&(once == 0)) {  // nothing received
+					else if ((!playing)&&(once == 0)) 
+					{  // nothing received
 							clientDisconnect(nodata);
 							clientSaveOneHeader(nodata,7,METANAME);
 							wsHeaders();
 							vTaskDelay(1);
 					}
-					else{  //playing & once=1 and no more received stream
+					else
+					{  //playing & once=1 and no more received stream
 						while (spiRamFifoFill()) vTaskDelay(200);
 						vTaskDelay(100);
 						clientDisconnect("once");
@@ -1637,8 +1644,7 @@ void clientTask(void *pvParams) {
 
 			if (playing)  // stop clean
 			{
-				if (get_player_status() != STOPPED)
-					audio_player_stop();
+				if (get_player_status() != STOPPED)	audio_player_stop();
 				player_config->media_stream->eof = true;
 				if (get_audio_output_mode() == VS1053) VS1053_flush_cancel();
 				playing = 0;
@@ -1648,7 +1654,8 @@ void clientTask(void *pvParams) {
 			
 			clearAll:
 			spiRamFifoReset();
-			if (https){
+			if (https)
+			{
 				if (ssl) wolfSSL_free(ssl);    // Free the wolfSSL object 
 				ESP_LOGI(TAG,"SSL Cleanup 1 Socket: %d",sockfd);
 			}
@@ -1660,7 +1667,7 @@ void clientTask(void *pvParams) {
 			  clientConnect();
 			}
 			vTaskDelay(2);
-			uxHighWaterMark = uxTaskGetStackHighWaterMark( NULL );
+			uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
 			ESP_LOGI(TAG,"watermark : %x  %d",uxHighWaterMark,uxHighWaterMark);
 		}
 	}
