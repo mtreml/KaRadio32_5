@@ -9,7 +9,7 @@
 #define INCLUDE_AUDIO_RENDERER_H_
 
 #include "freertos/FreeRTOS.h"
-#include "driver/i2s.h"
+#include "driver/i2s_std.h"
 #include "common_component.h"
 #include "app_main.h"
 
@@ -20,7 +20,7 @@ typedef struct
     output_mode_t output_mode;
     int sample_rate;
     float sample_rate_modifier;
-    i2s_bits_per_sample_t bit_depth;
+    uint8_t bit_depth;
     i2s_port_t i2s_num;
 	uint32_t volume;
 	uint8_t frame_num;
@@ -34,7 +34,7 @@ typedef enum
 typedef struct
 {
     uint32_t sample_rate;
-    i2s_bits_per_sample_t bit_depth;
+    uint8_t bit_depth;
     uint8_t num_channels;
     pcm_buffer_layout_t buffer_format;
 } pcm_format_t;
@@ -55,6 +55,6 @@ void renderer_destroy();
 void renderer_zero_dma_buffer();
 renderer_config_t *renderer_get();
 
-bool init_i2s();
+bool i2s_init();
 
 #endif /* INCLUDE_AUDIO_RENDERER_H_ */

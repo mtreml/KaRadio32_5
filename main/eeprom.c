@@ -11,6 +11,7 @@
 #include "esp_partition.h"
 #include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 //#include "driver/uart.h"
 

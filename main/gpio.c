@@ -12,7 +12,7 @@
 #include "esp_log.h"
 #include "app_main.h"
 #include "eeprom.h"
-
+#include "freertos/semphr.h"
 
 static xSemaphoreHandle muxnvs= NULL;
 const char hardware[] = {"hardware"};

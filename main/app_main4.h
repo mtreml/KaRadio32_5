@@ -39,7 +39,7 @@ Copyright (C) 2017  KaraWin
 #include "esp_sleep.h"
 //#include "esp_heap_trace.h"
 #include "nvs_flash.h"
-#include "driver/i2s.h"
+#include "driver/i2s_std.h"
 #include "driver/uart.h"
 
 #include "lwip/sys.h"
@@ -129,8 +129,8 @@ static bool bigRam = false;
 static uint32_t ctimeMs = 0;	
 static bool divide = false;
 
-esp_netif_t *ap;
-esp_netif_t *sta;
+static esp_netif_t *ap_t;
+static esp_netif_t *sta_t;
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 gptimer_handle_t mstimer = NULL;
@@ -166,9 +166,7 @@ void* kcalloc(size_t elementCount, size_t elementSize)
 {
 	if (bigRam) return heap_caps_calloc(elementCount,elementSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 	else return heap_caps_calloc(elementCount,elementSize, MALLOC_CAP_INTERNAL  | MALLOC_CAP_8BIT);
-		
 }
-
 
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
@@ -460,11 +458,11 @@ static renderer_config_t *create_renderer_config()
     renderer_config_t *renderer_config = kcalloc(1, sizeof(renderer_config_t));
 
     if(renderer_config->output_mode == I2S_MERUS) {
-        renderer_config->bit_depth = I2S_BITS_PER_SAMPLE_32BIT;
+        //renderer_config->bit_depth = I2S_BITS_PER_SAMPLE_32BIT;
     }
 
     if(renderer_config->output_mode == DAC_BUILT_IN) {
-        renderer_config->bit_depth = I2S_BITS_PER_SAMPLE_16BIT;
+        //renderer_config->bit_depth = I2S_BITS_PER_SAMPLE_16BIT;
     }
 
     return renderer_config;
@@ -618,11 +616,14 @@ static void start_wifi()
 		esp_netif_init();
 		wifi_event_group = xEventGroupCreate();	
 		ESP_ERROR_CHECK(esp_event_loop_create_default());
-		ap = esp_netif_create_default_wifi_ap();
-		assert(ap);
-		sta = esp_netif_create_default_wifi_sta();
-		assert(sta);
-													wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();																													
+		
+		ap_t = esp_netif_create_default_wifi_ap();
+		assert(ap_t);
+		
+		sta_t = esp_netif_create_default_wifi_sta();
+		assert(sta_t);
+		
+		wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();																													
 		ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 		ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
 		ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL));
@@ -637,7 +638,8 @@ static void start_wifi()
 		if (strlen(g_device->ssid1) !=0)
 		{
 			g_device->current_ap = STA1;
-		} else
+		} 
+		else
 		{ 
 			if (strlen(g_device->ssid2) !=0)
 				g_device->current_ap = STA2;
@@ -651,7 +653,7 @@ static void start_wifi()
 	{
 		if (first_pass)
 		{
-			ESP_ERROR_CHECK( esp_wifi_stop() );
+			ESP_ERROR_CHECK(esp_wifi_stop());
 			vTaskDelay(5);
 		}
 		
@@ -671,13 +673,16 @@ static void start_wifi()
 			default: // other: AP mode
 				g_device->current_ap = APMODE;
 				ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP)) ;
+				break;
 		}
 		
 		if (g_device->current_ap == APMODE)
 		{
 			printf("WIFI GO TO AP MODE\n");
-			wifi_config_t ap_config = {
-				.ap = {
+			wifi_config_t ap_config = 
+			{
+				.ap = 
+				{
 					.ssid = "WifiKaradio",
 					.authmode = WIFI_AUTH_OPEN,
 					.max_connection = 2,
@@ -688,7 +693,7 @@ static void start_wifi()
 			ESP_LOGE(TAG, "The default AP is  WifiKaRadio. Connect your wifi to it.\nThen connect a webbrowser to 192.168.4.1 and go to Setting\nMay be long to load the first time.Be patient.");
 
 			vTaskDelay(1);
-			ESP_ERROR_CHECK( esp_wifi_start() );			
+			ESP_ERROR_CHECK(esp_wifi_start());			
 			
 //			audio_output_mode = I2S;
 			option_get_audio_output(&audio_output_mode);
@@ -696,11 +701,14 @@ static void start_wifi()
 		else
 		{
 			printf("WIFI TRYING TO CONNECT TO SSID %d\n",g_device->current_ap);
-			wifi_config_t wifi_config = {
-				.sta = {
+			wifi_config_t wifi_config = 
+			{
+				.sta = 
+				{
 					.bssid_set = 0,
 					.scan_method = WIFI_ALL_CHANNEL_SCAN,
-					.sort_method = WIFI_CONNECT_AP_BY_SIGNAL,				},
+					.sort_method = WIFI_CONNECT_AP_BY_SIGNAL,				
+				},
 			};
 			strcpy((char*)wifi_config.sta.ssid,ssid);
 			strcpy((char*)wifi_config.sta.password,pass);
@@ -715,29 +723,30 @@ static void start_wifi()
 				ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
 				ESP_LOGI(TAG, "connecting %s",ssid);
-				ESP_ERROR_CHECK( esp_wifi_start() );	
+				ESP_ERROR_CHECK(esp_wifi_start());	
 			} 
 			else
 			{
 				g_device->current_ap++;
-				g_device->current_ap %=3;
+				g_device->current_ap %= 3;
 				
 				if (getAutoWifi() && (g_device->current_ap == APMODE))
 				{
-					if (fgetc(stdin)==0xFF) // if a char read, stop the autowifi
+					if (fgetc(stdin) == 0xFF) // if a char read, stop the autowifi
 					g_device->current_ap = STA1; // if autoWifi then wait for a reconnection to an AP
 					ESP_LOGI(TAG,"Wait for the AP");
 				}
 				else 
-					ESP_LOGI(TAG,"Empty AP. Try next one");
-				
+				{
+						ESP_LOGI(TAG,"Empty AP. Try next one");
+				}
 				saveDeviceSettings(g_device);
 				continue;
 			}				
 		}
 
 		/* Wait for the callback to set the CONNECTED_BIT in the event group. */
-		if ( (xEventGroupWaitBits(wifi_event_group, CONNECTED_AP,false, true, 2000) & CONNECTED_AP) ==0) 
+		if ((xEventGroupWaitBits(wifi_event_group, CONNECTED_AP,false, true, 2000) & CONNECTED_AP) ==0) 
 		//timeout . Try the next AP
 		{
 			g_device->current_ap++;
@@ -746,8 +755,7 @@ static void start_wifi()
 			{
 				char inp = fgetc(stdin);
 				printf("\nfgetc : %x\n",inp);
-				if (inp==0xFF) // 
-					g_device->current_ap = STA1;//if a char read, stop the autowifi
+				if (inp == 0xFF) g_device->current_ap = STA1;//if a char read, stop the autowifi
 			}
 			saveDeviceSettings(g_device);
 			ESP_LOGI(TAG,"device->current_ap: %d",g_device->current_ap);	
@@ -759,7 +767,7 @@ static void start_wifi()
 
 void start_network(){
 //	struct device_settings *g_device;	
-	esp_netif_ip_info_t info;
+//	esp_netif_ip_info_t ipi_info;
 	wifi_mode_t mode;	
 	ip4_addr_t ipAddr;
 	ip4_addr_t mask;
@@ -770,7 +778,7 @@ void start_network(){
 	IP4_ADDR(&gate, 192, 168, 4, 1);
 	IP4_ADDR(&mask, 255, 255, 255, 0);
 
-	esp_netif_dhcpc_stop(sta); // Don't run a DHCP client								 
+	esp_netif_dhcpc_stop(sta_t); // Don't run a DHCP client								 
 	
 	switch (g_device->current_ap)
 	{
@@ -791,49 +799,47 @@ void start_network(){
 			IP4_ADDR(&ipAddr, 192,168,4,1);
 			IP4_ADDR(&gate, 192, 168, 4, 1);
 			IP4_ADDR(&mask,255,255,255,0);
+		break;
 	}	
 	
-	ip4_addr_copy(info.ip, ipAddr);
-	ip4_addr_copy(info.gw, gate);
-	ip4_addr_copy(info.netmask, mask);
+	ip4_addr_copy(ipi_info.ip, ipAddr);
+	ip4_addr_copy(ipi_info.gw, gate);
+	ip4_addr_copy(ipi_info.netmask, mask);
 	
 	ESP_ERROR_CHECK(esp_wifi_get_mode(&mode));		
 	if (mode == WIFI_MODE_AP)
 	{
 		xEventGroupWaitBits(wifi_event_group, CONNECTED_AP,false, true, 3000);
-		ip4_addr_copy(info.ip, ipAddr);
+		ip4_addr_copy(ipi_info.ip, ipAddr);
 
 	
-		esp_netif_set_ip_info(ap, &info);
+		esp_netif_set_ip_info(ap_t, &ipi_info);
 		esp_netif_ip_info_t ap_ip_info;
 		ap_ip_info.ip.addr = 0;
 		while (ap_ip_info.ip.addr == 0)
 		{
-			esp_netif_get_ip_info(ap, &ap_ip_info);
+			esp_netif_get_ip_info(ap_t, &ap_ip_info);
 		}
 	}
 	else // mode STA
 	{	
 		if (dhcpEn ) // check if ip is valid without dhcp
-			esp_netif_dhcpc_start(sta); //  run a DHCP client
+			esp_netif_dhcpc_start(sta_t); //  run a DHCP client
 		else
 		{
-			ESP_ERROR_CHECK(esp_netif_set_ip_info(sta, &info));
+			ESP_ERROR_CHECK(esp_netif_set_ip_info(sta_t, &ipi_info));
 			dns_clear_cache();
-			IP_SET_TYPE((( ip_addr_t* )&info.gw), IPADDR_TYPE_V4); // mandatory
-//			(( ip_addr_t* )&info.gw)->type = IPADDR_TYPE_V4;
-			dns_setserver(0,( ip_addr_t* ) &info.gw);
-			dns_setserver(1,( ip_addr_t* ) &info.gw);				// if static ip	check dns
+			IP_SET_TYPE((( ip_addr_t* )&ipi_info.gw), IPADDR_TYPE_V4); // mandatory
+//			(( ip_addr_t* )&ipi_info.gw)->type = IPADDR_TYPE_V4;
+			dns_setserver(0,( ip_addr_t* ) &ipi_info.gw);
+			dns_setserver(1,( ip_addr_t* ) &ipi_info.gw);				// if static ip	check dns
 		}
-
 		
 		// wait for ip						
 		if ( (xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT,false, true, 3000) & CONNECTED_BIT) ==0) //timeout	
 		{ // enable dhcp and restart
-			if (g_device->current_ap ==1)
-				g_device->dhcpEn1 = 1;
-			else
-				g_device->dhcpEn2 = 1;
+			if (g_device->current_ap == 1) g_device->dhcpEn1 = 1;
+			else g_device->dhcpEn2 = 1;
 			saveDeviceSettings(g_device);	
 			esp_restart();
 		}
@@ -844,8 +850,7 @@ void start_network(){
 		sta_ip_info.ip.addr = 0;
 		while (sta_ip_info.ip.addr ==0)
 		{
-			esp_netif_get_ip_info(sta, &sta_ip_info);
-		
+			esp_netif_get_ip_info(sta_t, &sta_ip_info);
 		}
 		
 		ip_addr_t *ipdns0 = (ip_addr_t *)dns_getserver(0);
@@ -855,32 +860,32 @@ void start_network(){
 		
 		if (dhcpEn) // if dhcp enabled update fields
 		{  
-			esp_netif_get_ip_info(sta, &info);
+			esp_netif_get_ip_info(sta_t, &ipi_info);
 			switch (g_device->current_ap)
 			{
 			case STA1: //ssid1 used
-				ip4addr_aton((const char *)&g_device->ipAddr1,(ip4_addr_t *)&info.ip);
-				ip4addr_aton((const char *)&g_device->gate1,(ip4_addr_t *)&info.gw);
-				ip4addr_aton((const char *)&g_device->mask1,(ip4_addr_t *)&info.netmask);
+				ip4addr_aton((const char *)&g_device->ipAddr1,(ip4_addr_t *)&ipi_info.ip);
+				ip4addr_aton((const char *)&g_device->gate1,(ip4_addr_t *)&ipi_info.gw);
+				ip4addr_aton((const char *)&g_device->mask1,(ip4_addr_t *)&ipi_info.netmask);
 				break;
 
 			case STA2: //ssid2 used
-				ip4addr_aton((const char *)&g_device->ipAddr2,(ip4_addr_t *)&info.ip);
-				ip4addr_aton((const char *)&g_device->gate2,(ip4_addr_t *)&info.gw);
-				ip4addr_aton((const char *)&g_device->mask2,(ip4_addr_t *)&info.netmask);
+				ip4addr_aton((const char *)&g_device->ipAddr2,(ip4_addr_t *)&ipi_info.ip);
+				ip4addr_aton((const char *)&g_device->gate2,(ip4_addr_t *)&ipi_info.gw);
+				ip4addr_aton((const char *)&g_device->mask2,(ip4_addr_t *)&ipi_info.netmask);
 				break;
 			}
 		}
 		saveDeviceSettings(g_device);	
-		esp_netif_set_hostname(sta, "karadio32");
+		esp_netif_set_hostname(sta_t, "karadio32");
 	}
-	ip4_addr_copy(ipAddr, info.ip);
+	
+	ip4_addr_copy(ipAddr, ipi_info.ip);
 	strcpy(localIp, ip4addr_ntoa(&ipAddr));
 	ESP_LOGW(TAG, "IP: %s\n\n", localIp);									  
 	
 	lcd_welcome(localIp,"IP found");
 	vTaskDelay(10);
-	
 }
 
 
@@ -1309,7 +1314,7 @@ void app_main()
 	setIvol( g_device->vol);
 	kprintf("READY. Type help for a list of commands\n");
 	// error log on telnet
-	esp_log_set_vprintf( (vprintf_like_t)lkprintf);
+	esp_log_set_vprintf((vprintf_like_t)lkprintf);
 	ESP_LOGI(TAG, "RAM left %d", esp_get_free_heap_size());
 	//autostart		
 	autoPlay();

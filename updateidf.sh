@@ -1,5 +1,5 @@
 #!/bin/bash
-cd ~/esp/esp-idf
+cd /z/esp-idf/
 git pull
 git submodule update --init --recursive
-cd ~/esp/Ka-Radio32
+cd /z/examples/KaRadio32_4

@@ -747,18 +747,19 @@ void drawNumberUcg(uint8_t mTscreen,char* irStr)
   uint16_t xxx ;
   char ststr[] = {"Number"};
     switch (mTscreen){
-      case 1:     
-		TTitleStr[0] = 0;   
-        drawTTitleUcg(ststr);   
-      // no break
-      case 2:  
-        xxx = (x/2)-(ucg_GetStrWidth(&ucg,irStr)/2); 
-        ucg_SetColor(&ucg,0,CBLACK);  
-        ucg_DrawBox(&ucg,0,HHeader,x,yy);     
-        setfont(large);
-        ucg_SetColor(&ucg,0,CBODY);  
-        ucg_DrawString(&ucg,xxx,yy/3,0, irStr);
-        break;
+      	case 1:     
+			TTitleStr[0] = 0;   
+    	    drawTTitleUcg(ststr);   
+    	  	// no break
+			/*fall through*/
+      	case 2:  
+    	    xxx = (x/2)-(ucg_GetStrWidth(&ucg,irStr)/2); 
+    	    ucg_SetColor(&ucg,0,CBLACK);  
+    	    ucg_DrawBox(&ucg,0,HHeader,x,yy);     
+    	    setfont(large);
+    	    ucg_SetColor(&ucg,0,CBODY);  
+    	    ucg_DrawString(&ucg,xxx,yy/3,0, irStr);
+    	    break;
       default:; 
     }  
 
@@ -767,34 +768,35 @@ void drawNumberUcg(uint8_t mTscreen,char* irStr)
 //////////////////////////
 void drawStationUcg(uint8_t mTscreen,char* snum,char* ddot)
 {
-	
   char ststr[] = {"Station"};
   int16_t len;
   LANG scharset;
   	scharset = charset;
 	charset = Latin;
     switch (mTscreen){
-      case 1:  
-		TTitleStr[0] = 0;        
-        drawTTitleUcg(ststr);
-      // no break
-      case 2:   
-        ucg_SetColor(&ucg,0,CBLACK); 
-        ucg_DrawBox(&ucg,0,HHeader,x,yy);     
- //       setfont(middle);
-        ucg_SetColor(&ucg,0,CBODY);
-//        ddot = strstr(sline,":");
-        if (ddot != NULL)
-        {
-		  removeUtf8(ddot);
-		  setfont(middle);
-          ucg_DrawString(&ucg,(x/2)-(ucg_GetStrWidth(&ucg,snum)/2),yy/3,0,snum);
-          len = (x/2)-(ucg_GetStrWidth(&ucg,ddot)/2);
-          if (len <0) len = 0;
-          ucg_DrawString(&ucg,len,yy/3 + ucg_GetFontAscent(&ucg)+y,0, ddot);
-        }
-        break;
-      default:; 
+    	case 1:  
+			TTitleStr[0] = 0;        
+        	drawTTitleUcg(ststr);
+      		// no break
+			/*fall through*/
+      	case 2:   
+        	ucg_SetColor(&ucg,0,CBLACK); 
+        	ucg_DrawBox(&ucg,0,HHeader,x,yy);     
+ 			//setfont(middle);
+        	ucg_SetColor(&ucg,0,CBODY);
+			//ddot = strstr(sline,":");
+	        if (ddot != NULL)
+	        {
+			  removeUtf8(ddot);
+			  setfont(middle);
+	          ucg_DrawString(&ucg,(x/2)-(ucg_GetStrWidth(&ucg,snum)/2),yy/3,0,snum);
+	          len = (x/2)-(ucg_GetStrWidth(&ucg,ddot)/2);
+	          if (len <0) len = 0;
+	          ucg_DrawString(&ucg,len,yy/3 + ucg_GetFontAscent(&ucg)+y,0, ddot);
+	        }
+        	break;
+      	default:
+	  	break; 
     } 	
 	charset = scharset;
 
@@ -879,35 +881,36 @@ void drawTimeUcg(uint8_t mTscreen,unsigned timein)
   LANG scharset;
     sprintf(strtime,"%02d:%02d", dt->tm_hour, dt->tm_min);
     switch (mTscreen){
-      case 1:
-		scharset = charset;
-		charset = Latin;
-		setfont(text);
-		sprintf(strdate,"IP: %s", getIp());
-		ucg_ClearScreen(&ucg);
-        ucg_SetColor(&ucg,0,CRED);  
-		TTitleStr[0] = 0;
-		TTimeStr[0] = 0;
-        ucg_DrawString(&ucg,4,yy-(2*y),0,strdate);	
-		charset = scharset;		
-      case 2:
-	    if (getDdmm())
-			sprintf(strdate,"%02d-%02d-%04d", dt->tm_mday, dt->tm_mon+1,  dt->tm_year+1900);
-	    else
-			sprintf(strdate,"%02d-%02d-%04d", dt->tm_mon+1, dt->tm_mday, dt->tm_year+1900);
-		drawTTitleUcg(strdate);
-		if (strcmp(TTimeStr,strtime)!= 0)
-		{	
-			setfont(large);
-			ucg_SetColor(&ucg,0,CBODY);		
-			ucg_SetFontMode(&ucg,UCG_FONT_MODE_SOLID); 
-			ucg_DrawString(&ucg,(x/2)-(ucg_GetStrWidth(&ucg,strtime)/2),yy/3,0,strtime); 
-			strcpy(TTimeStr,strtime);
-			ucg_SetFontMode(&ucg,UCG_FONT_MODE_TRANSPARENT);
-		}
-
-		break;
-      default:;
+      	case 1:
+			scharset = charset;
+			charset = Latin;
+			setfont(text);
+			sprintf(strdate,"IP: %s", getIp());
+			ucg_ClearScreen(&ucg);
+	        ucg_SetColor(&ucg,0,CRED);  
+			TTitleStr[0] = 0;
+			TTimeStr[0] = 0;
+	        ucg_DrawString(&ucg,4,yy-(2*y),0,strdate);	
+			charset = scharset;		
+	        /*fall through*/
+		case 2:
+		    if (getDdmm())
+				sprintf(strdate,"%02d-%02d-%04d", dt->tm_mday, dt->tm_mon+1,  dt->tm_year+1900);
+		    else
+				sprintf(strdate,"%02d-%02d-%04d", dt->tm_mon+1, dt->tm_mday, dt->tm_year+1900);
+			drawTTitleUcg(strdate);
+			if (strcmp(TTimeStr,strtime)!= 0)
+			{	
+				setfont(large);
+				ucg_SetColor(&ucg,0,CBODY);		
+				ucg_SetFontMode(&ucg,UCG_FONT_MODE_SOLID); 
+				ucg_DrawString(&ucg,(x/2)-(ucg_GetStrWidth(&ucg,strtime)/2),yy/3,0,strtime); 
+				strcpy(TTimeStr,strtime);
+				ucg_SetFontMode(&ucg,UCG_FONT_MODE_TRANSPARENT);
+			}
+			break;
+      	default:
+			break;
     }
 
 	drawInfo(timein);     	

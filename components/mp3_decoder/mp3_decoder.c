@@ -41,7 +41,7 @@ static long buf_underrun_cnt;
 /* default MAD buffer format */
 pcm_format_t mad_buffer_fmt = {
     .sample_rate = 44100,
-    .bit_depth = I2S_BITS_PER_SAMPLE_16BIT,
+    .bit_depth = I2S_DATA_BIT_WIDTH_16BIT,
     .num_channels = 2,
     .buffer_format = PCM_LEFT_RIGHT
 };
@@ -136,7 +136,7 @@ void mp3_decoder_task(void *pvParameters)
 
     ESP_LOGD(TAG, "Decoder start.");
 
-	if (!init_i2s()) 
+	if (!i2s_init()) 
 	{
 		goto abort0;
 	}
@@ -144,7 +144,7 @@ void mp3_decoder_task(void *pvParameters)
 	
 	//ESP_LOGD(TAG, "init I2S mode %d, port %d, %d bit, %d Hz", renderer_instance->output_mode, renderer_instance->i2s_num, renderer_instance->bit_depth, renderer_instance->sample_rate);
     // buffer might contain noise
-    i2s_zero_dma_buffer(renderer_instance->i2s_num);
+    //i2s_zero_dma_buffer(renderer_instance->i2s_num);
 //    i2s_start(renderer_instance->i2s_num);
 
     //Initialize mp3 parts
@@ -190,8 +190,8 @@ void mp3_decoder_task(void *pvParameters)
 	// exit on normal exit
 	cleanup:
     // avoid noise
-	i2s_stop(renderer_instance->i2s_num);
-	i2s_zero_dma_buffer(renderer_instance->i2s_num);
+	//i2s_stop(renderer_instance->i2s_num);
+	//i2s_zero_dma_buffer(renderer_instance->i2s_num);
     renderer_zero_dma_buffer();
 
     if (synth != NULL) free(synth);
@@ -202,8 +202,8 @@ void mp3_decoder_task(void *pvParameters)
     // clear semaphore for reader task
     spiRamFifoReset();
 	renderer_zero_dma_buffer();
-	i2s_stop(renderer_instance->i2s_num);
-	i2s_driver_uninstall(renderer_instance->i2s_num);	
+	//i2s_stop(renderer_instance->i2s_num);
+	//i2s_driver_uninstall(renderer_instance->i2s_num);	
     player->decoder_status = STOPPED;
     player->decoder_command = CMD_NONE;
     ESP_LOGD(TAG, "Decoder stopped.\n");
