@@ -458,11 +458,11 @@ static renderer_config_t *create_renderer_config()
     renderer_config_t *renderer_config = kcalloc(1, sizeof(renderer_config_t));
 
     if(renderer_config->output_mode == I2S_MERUS) {
-        //renderer_config->bit_depth = I2S_BITS_PER_SAMPLE_32BIT;
+        renderer_config->bit_depth = I2S_DATA_BIT_WIDTH_32BIT;
     }
 
     if(renderer_config->output_mode == DAC_BUILT_IN) {
-        //renderer_config->bit_depth = I2S_BITS_PER_SAMPLE_16BIT;
+        renderer_config->bit_depth = I2S_DATA_BIT_WIDTH_16BIT;
     }
 
     return renderer_config;

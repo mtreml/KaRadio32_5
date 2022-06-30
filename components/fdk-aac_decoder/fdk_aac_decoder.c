@@ -203,5 +203,4 @@ void fdkaac_decoder_task(void *pvParameters)
 	return;
 	abort1:
 	esp_restart();
-	
 }
