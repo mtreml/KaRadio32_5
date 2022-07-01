@@ -91,6 +91,9 @@ Copyright (C) 2017  KaraWin
 #endif
 //#include "rda5807Task.h"
 
+#include "esp_netif.h"
+esp_netif_ip_info_t ipi_info;
+
 /* The event group allows multiple bits for each event*/
 //   are we connected  to the AP with an IP? */
 const int CONNECTED_BIT = 0x00000001;

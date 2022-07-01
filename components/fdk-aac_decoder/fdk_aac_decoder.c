@@ -39,8 +39,8 @@ void fdkaac_decoder_task(void *pvParameters)
 {
     // ESP_LOGI(TAG, "(line %u) free heap: %u", __LINE__, esp_get_free_heap_size());
     player_t *player = pvParameters;
-	renderer_config_t *renderer_instance;
-	renderer_instance = renderer_get();
+	//renderer_config_t *renderer_instance;
+	//renderer_instance = renderer_get();
     AAC_DECODER_ERROR err;
 	if (!i2s_init()) 
 	{
@@ -62,7 +62,7 @@ void fdkaac_decoder_task(void *pvParameters)
     in_buf = buf_create_dma(INPUT_BUFFER_SIZE* bf );
 	if (in_buf==NULL) { 
 		ESP_LOGE(TAG,"buf_create in_buf failed"); 
-		buf_destroy( pcm_buf); 
+		buf_destroy(pcm_buf); 
 		goto abort1; 
 	}
 
@@ -108,21 +108,18 @@ void fdkaac_decoder_task(void *pvParameters)
             fill_read_buffer(in_buf);
 			bytes_avail = buf_data_unread(in_buf);
 //			vTaskDelay(1);
-			if(player->decoder_command == CMD_STOP) {
-                break;
-			}       
-		}
-
+			if(player->decoder_command == CMD_STOP) break;
+	}
 //		watchgog reset 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-		TIMERG0.wdtwprotect.wdt_wkey = TIMG_WDT_WKEY_VALUE;
-		TIMERG0.wdtfeed.wdt_feed = 1;
-		TIMERG0.wdtwprotect.wdt_wkey = 0;
-#else
-		TIMERG0.wdt_wprotect=TIMG_WDT_WKEY_VALUE;
-		TIMERG0.wdt_feed=1;
-		TIMERG0.wdt_wprotect=0;
-#endif
+		#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+			TIMERG0.wdtwprotect.wdt_wkey = TIMG_WDT_WKEY_VALUE;
+			TIMERG0.wdtfeed.wdt_feed = 1;
+			TIMERG0.wdtwprotect.wdt_wkey = 0;
+		#else
+			TIMERG0.wdt_wprotect=TIMG_WDT_WKEY_VALUE;
+			TIMERG0.wdt_feed=1;
+			TIMERG0.wdt_wprotect=0;
+		#endif
         // bytes_avail will be updated and indicate "how much data is left"
 //        size_t bytes_avail = buf_data_unread(in_buf);
 		//printf("B%d\n",bytes_avail);
@@ -132,9 +129,9 @@ void fdkaac_decoder_task(void *pvParameters)
 //        buf_seek_rel(in_buf, bytes_taken);
         in_buf->read_pos += bytes_taken;
         in_buf->bytes_consumed += bytes_taken;
-
 		
-		if (bytes_taken == 0) {  // blank output
+		if (bytes_taken == 0) 
+		{  // blank output
 //		if (!first_frame) {  // blank output  speed test
 			memset(pcm_buf->base,0,OUTPUT_BUFFER_SIZE);
 			pcm_buf->len = OUTPUT_BUFFER_SIZE;
@@ -147,18 +144,21 @@ void fdkaac_decoder_task(void *pvParameters)
 			
 //		if (err != AAC_DEC_OK) continue;
         // need more bytes, lets refill
-			if(err == AAC_DEC_TRANSPORT_SYNC_ERROR || err == AAC_DEC_NOT_ENOUGH_BITS) {
+			if(err == AAC_DEC_TRANSPORT_SYNC_ERROR || err == AAC_DEC_NOT_ENOUGH_BITS) 
+			{
 				ESP_LOGW(TAG, "decode error1 0x%08x", err);
 				continue;
 			}
 
-			if ((err != AAC_DEC_OK) && (err != AAC_DEC_INVALID_CODE_BOOK)){
+			if ((err != AAC_DEC_OK) && (err != AAC_DEC_INVALID_CODE_BOOK))
+			{
 				ESP_LOGW(TAG, "decode error 0x%08x", err);
 				continue;
 			}
 
 			/* print first frame, determine pcm buffer length */
-			if(first_frame) {
+			if(first_frame) 
+			{
 				first_frame = false;
 
 				CStreamInfo* mStreamInfo = aacDecoder_GetStreamInfo(handle);
@@ -174,9 +174,7 @@ void fdkaac_decoder_task(void *pvParameters)
 				pcm_format.sample_rate = mStreamInfo->sampleRate;
 			}
 		}
-				
         render_samples((char *) pcm_buf->base, pcm_size, &pcm_format);		
-
     }
 //	goto cleanup;
 	// exit on internal error

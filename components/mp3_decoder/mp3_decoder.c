@@ -118,8 +118,8 @@ void mp3_decoder_task(void *pvParameters)
     struct mad_frame *frame;
     struct mad_synth *synth;
 
-	renderer_config_t *renderer_instance;
-	renderer_instance = renderer_get();
+	//renderer_config_t *renderer_instance;
+	//renderer_instance = renderer_get();
 
     //Allocate structs needed for mp3 decoding
     stream = malloc(sizeof(struct mad_stream));
@@ -156,24 +156,18 @@ void mp3_decoder_task(void *pvParameters)
     while(1) {
 
         // calls mad_stream_buffer internally
-        if (input(stream, buf, player) == MAD_FLOW_STOP ) {
-            break;
-        }
-
+        if (input(stream, buf, player) == MAD_FLOW_STOP) break;
+     
         // decode frames until MAD complains
-        while(1) {
-
-            if(player->decoder_command == CMD_STOP) {
-                goto abort;
-            }
-
+        while(1) 
+        {
+            if(player->decoder_command == CMD_STOP) goto abort;
+         
             // returns 0 or -1
             ret = mad_frame_decode(frame, stream);
-            if (ret == -1) {
-                if (!MAD_RECOVERABLE(stream->error)) {
-                    //We're most likely out of buffer and need to call input() again
-                    break;
-                }
+            if (ret == -1) 
+            {
+                if (!MAD_RECOVERABLE(stream->error)) break; //We're most likely out of buffer and need to call input() again
                 error(NULL, stream, frame);
                 continue;
             }
@@ -192,7 +186,6 @@ void mp3_decoder_task(void *pvParameters)
     // avoid noise
 	//i2s_stop(renderer_instance->i2s_num);
 	//i2s_zero_dma_buffer(renderer_instance->i2s_num);
-    renderer_zero_dma_buffer();
 
     if (synth != NULL) free(synth);
     if (frame != NULL) free(frame);
@@ -210,8 +203,7 @@ void mp3_decoder_task(void *pvParameters)
 //    ESP_LOGD(TAG, "MAD decoder stack: %d\n", uxTaskGetStackHighWaterMark(NULL));
     vTaskDelete(NULL);
 	return;
-	
-	
+
 abort1:
 abort0:
 	esp_restart();

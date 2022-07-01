@@ -39,6 +39,8 @@
 #include "esp_wifi.h"
 #include "esp_netif.h"
 
+extern esp_netif_ip_info_t ipi_info;
+
 const char parslashquote[] = {"(\""};
 const char parquoteslash[] = {"\")"};
 const char msgsys[] = {"##SYS."};

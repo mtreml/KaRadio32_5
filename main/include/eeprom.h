@@ -102,9 +102,6 @@ struct shoutcast_info {
 
 extern struct device_settings* g_device;
 
-#include "esp_netif.h"
-static esp_netif_ip_info_t ipi_info;
-
 void partitions_init(void);
 void copyDeviceSettings();
 void restoreDeviceSettings();

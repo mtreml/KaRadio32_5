@@ -85,7 +85,7 @@ DRAM_ATTR static const uint16_t SPDIF_BMCLOOKUP[256] =
 	0xccaa, 0x4caa, 0x2caa, 0xacaa, 0x34aa, 0xb4aa, 0xd4aa, 0x54aa,
 	0x32aa, 0xb2aa, 0xd2aa, 0x52aa, 0xcaaa, 0x4aaa, 0x2aaa, 0xaaaa
 };
-static void IRAM_ATTR write_i2s(const void *buffer, size_t buf_len);
+static void write_i2s(const void *buffer, size_t buf_len);
 
 //KaraDio32
 void IRAM_ATTR renderer_volume(uint32_t vol)
@@ -501,7 +501,7 @@ static void IRAM_ATTR write_i2s(const void *buffer, size_t bytes_cnt)
 	size_t bytes_written = 0;
 	while((bytes_left > 0) && (renderer_status != STOPPED))
 	{
-		esp_err_t res = i2s_channel_write(tx_handle, buf, bytes_cnt, &bytes_written, 100);
+		esp_err_t res = i2s_channel_write(tx_handle, buf, bytes_cnt, &bytes_written, 1000);
 		if ( res != ESP_OK)
 		{
 			ESP_LOGE(TAG, "i2s_write error %d", res);
@@ -526,31 +526,33 @@ bool i2s_init()
     config->sample_rate_modifier = 1.0;
     config->output_mode = get_audio_output_mode();	
 	
-    if(config->output_mode == I2S_MERUS) {
-        config->bit_depth = I2S_DATA_BIT_WIDTH_32BIT;
-    }
-
     uint8_t bit_depth = config->bit_depth;
-	i2s_std_slot_config_t comm_fmt = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(bit_depth, I2S_SLOT_MODE_STEREO);
 	int sample_rate = config->sample_rate;
+	i2s_std_slot_config_t comm_fmt = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(bit_depth, I2S_SLOT_MODE_STEREO);
 
 	esp_chip_info_t out_info;
 	esp_chip_info(&out_info);
 
-    if(config->output_mode == DAC_BUILT_IN)
-    {
-		bit_depth = I2S_DATA_BIT_WIDTH_16BIT;
-        i2s_std_slot_config_t comm_fmt = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(bit_depth, I2S_SLOT_MODE_STEREO);
-    }
-    else if(config->output_mode == PDM)
-    {
-		i2s_std_slot_config_t comm_fmt = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(bit_depth, I2S_SLOT_MODE_STEREO);
-    }
-    else if(config->output_mode == SPDIF)
-    {
-		bit_depth = I2S_DATA_BIT_WIDTH_32BIT;
-		sample_rate = config->sample_rate * 2;
-    }
+	switch (config->output_mode)
+	{
+		case I2S_MERUS:
+	   		bit_depth = I2S_DATA_BIT_WIDTH_32BIT;
+			comm_fmt.data_bit_width = bit_depth; 
+			comm_fmt.ws_width = bit_depth; 		
+		case DAC_BUILT_IN:
+		   	break;
+	   	case PDM:
+			comm_fmt.ws_pol = true; 
+			comm_fmt.bit_shift = true; 	   		
+	   	break;
+		case SPDIF:
+	   		bit_depth = I2S_DATA_BIT_WIDTH_32BIT;
+			sample_rate = config->sample_rate * 2;
+			comm_fmt.data_bit_width = bit_depth; 
+			comm_fmt.ws_width = bit_depth; 		
+		default:
+		break;
+	}
 
  	gpio_num_t lrck;
 	gpio_num_t bclk;
@@ -559,20 +561,24 @@ bool i2s_init()
 	
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(config->i2s_num, I2S_ROLE_MASTER);
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_handle, NULL));
-    i2s_std_config_t std_cfg = {
+    
+	i2s_std_config_t std_cfg = 
+	{
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate),
         .slot_cfg = comm_fmt,
-        .gpio_cfg = {
+        .gpio_cfg = 
+		{
             .mclk = I2S_GPIO_UNUSED,
             .bclk = bclk,
             .ws   = lrck,
             .dout = i2sdata,
             .din  = I2S_GPIO_UNUSED,
-            .invert_flags = {
-                .mclk_inv = false,
-                .bclk_inv = false,
-                .ws_inv = false,
-            },
+            .invert_flags = 
+			{
+	           .mclk_inv = false,
+	           .bclk_inv = false,
+	           .ws_inv = false,
+	        },
         },
     };
 
