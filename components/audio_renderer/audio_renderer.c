@@ -532,7 +532,12 @@ bool i2s_init()
 
 	esp_chip_info_t out_info;
 	esp_chip_info(&out_info);
-
+	
+	comm_fmt.ws_width = bit_depth; 
+    comm_fmt.ws_pol = false; 
+    comm_fmt.bit_shift = false; 
+    comm_fmt.msb_right = false; 
+	
 	switch (config->output_mode)
 	{
 		case I2S_MERUS:

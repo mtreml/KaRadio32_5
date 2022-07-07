@@ -715,6 +715,7 @@ int i;
 		ucg_DrawBox(&ucg,0,0,x-1,15);  
 		for (i=0;i<LINES;i++) draw(i);
 		// no break
+		/*fall through*/
 	case MTREFRESH:	
 		markDrawResetUcg(TIME);
 		drawLinesUcg();
@@ -815,7 +816,8 @@ void drawVolumeUcg(uint8_t mTscreen)
       case 1: 
 		ucg_ClearScreen(&ucg);
 		TTitleStr[0] = 0;
-        drawTTitleUcg(vlstr) ;		
+        drawTTitleUcg(vlstr);
+		/*fall through*/		
       case 2:
         setfont(large); 
         uint16_t xxx;

@@ -8,273 +8,249 @@
 
 
 #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-#include <stddef.h>
-#include <string.h>
-#include <stdio.h>
-#include <sys/time.h>
 #include "ClickEncoder.h"
 #include "app_main.h"
 #include "gpio.h"
 #include "webclient.h"
 #include "webserver.h"
 #include "interface.h"
+
+/*
+ * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Unlicense OR CC0-1.0
+ */
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/queue.h"
+#include "esp_log.h"
+#include "driver/rmt_rx.h"
 
-#include "driver/rmt.h"
-#include "soc/rmt_reg.h"
+#define IR_RESOLUTION_HZ     1000000 // 1MHz resolution, 1 tick = 1us
+#define IR_NEC_DECODE_MARGIN 200     // Tolerance for parsing RMT symbols into bit stream
 
-//IR
-#define RMT_RX_ACTIVE_LEVEL  0   /*!< If we connect with a IR receiver, the data is active low */
-#define RMT_RX_CHANNEL    0     /*!< RMT channel for receiver */
-#define RMT_CLK_DIV      100    /*!< RMT counter clock divider */
-#define RMT_TICK_10_US    (80000000/RMT_CLK_DIV/100000)   /*!< RMT counter value for 10 us.(Source clock is APB clock) */
-
-#define NEC_HEADER_HIGH_US    9300                         /*!< NEC protocol header: positive 9ms */
-#define NEC_HEADER_LOW_US     4600                         /*!< NEC protocol header: negative 4.5ms*/
-#define NEC_REPEAT_LOW_US	  2300                         /*!< NEC protocol repeat: negative 2.25ms*/
-#define NEC_BIT_ONE_HIGH_US    600                         /*!< NEC protocol data bit 1: positive 0.56ms */
-#define NEC_BIT_ONE_LOW_US    (2250-NEC_BIT_ONE_HIGH_US)   /*!< NEC protocol data bit 1: negative 1.69ms */
-#define NEC_BIT_ZERO_HIGH_US   600                         /*!< NEC protocol data bit 0: positive 0.56ms */
-#define NEC_BIT_ZERO_LOW_US   (1120-NEC_BIT_ZERO_HIGH_US)  /*!< NEC protocol data bit 0: negative 0.56ms */
-#define NEC_BIT_END            600/*560*/                        /*!< NEC protocol end: positive 0.56ms */
-#define NEC_BIT_MARGIN         400/*20*/                          /*!< NEC parse margin time */
-
-#define NEC_ITEM_DURATION(d)  ((d & 0x7fff)*10/RMT_TICK_10_US)  /*!< Parse duration time from memory register value */
-#define NEC_DATA_ITEM_NUM   34  /*!< NEC code item number: header + 32bit data + end */
-#define rmt_item32_tIMEOUT_US  9500   /*!< RMT receiver timeout value(us) */
-#define RTN_REPEAT	0xFF	/*!< return code for a repeat frame*/
-
-
-static const char* NEC_TAG = "NEC";
-
-
- 
- /*
- * @brief Check whether duration is around target_us
+/**
+ * @brief NEC timing spec
  */
-/*inline*/ bool nec_check_in_range(int duration_ticks, int target_us, int margin_us)
+#define NEC_LEADING_CODE_DURATION_0  9000
+#define NEC_LEADING_CODE_DURATION_1  4500
+#define NEC_PAYLOAD_ZERO_DURATION_0  560
+#define NEC_PAYLOAD_ZERO_DURATION_1  560
+#define NEC_PAYLOAD_ONE_DURATION_0   560
+#define NEC_PAYLOAD_ONE_DURATION_1   1690
+#define NEC_REPEAT_CODE_DURATION_0   9000
+#define NEC_REPEAT_CODE_DURATION_1   2250
+
+static const char *TAG = "IR_NEC";
+
+/**
+ * @brief Saving NEC decode results
+ */
+static uint16_t s_nec_code_address;
+static uint16_t s_nec_code_command;
+
+/**
+ * @brief Check whether a duration is within expected range
+ */
+static inline bool nec_check_in_range(uint32_t signal_duration, uint32_t spec_duration)
 {
-//	ESP_LOGD(NEC_TAG,"NEC_ITEM_DURATION(%d)= %d",duration_ticks,NEC_ITEM_DURATION(duration_ticks));
-    if(( NEC_ITEM_DURATION(duration_ticks) < (target_us + margin_us))
-        && ( NEC_ITEM_DURATION(duration_ticks) > (target_us - margin_us))) {
-        return true;
-    } else {
+    return (signal_duration < (spec_duration + IR_NEC_DECODE_MARGIN)) &&
+           (signal_duration > (spec_duration - IR_NEC_DECODE_MARGIN));
+}
+
+/**
+ * @brief Check whether a RMT symbol represents NEC logic zero
+ */
+static bool nec_parse_logic0(rmt_symbol_word_t *rmt_nec_symbols)
+{
+    return nec_check_in_range(rmt_nec_symbols->duration0, NEC_PAYLOAD_ZERO_DURATION_0) &&
+           nec_check_in_range(rmt_nec_symbols->duration1, NEC_PAYLOAD_ZERO_DURATION_1);
+}
+
+/**
+ * @brief Check whether a RMT symbol represents NEC logic one
+ */
+static bool nec_parse_logic1(rmt_symbol_word_t *rmt_nec_symbols)
+{
+    return nec_check_in_range(rmt_nec_symbols->duration0, NEC_PAYLOAD_ONE_DURATION_0) &&
+           nec_check_in_range(rmt_nec_symbols->duration1, NEC_PAYLOAD_ONE_DURATION_1);
+}
+
+/**
+ * @brief Decode RMT symbols into NEC address and command
+ */
+static bool nec_parse_frame(rmt_symbol_word_t *rmt_nec_symbols)
+{
+    rmt_symbol_word_t *cur = rmt_nec_symbols;
+    uint16_t address = 0;
+    uint16_t command = 0;
+    bool valid_leading_code = nec_check_in_range(cur->duration0, NEC_LEADING_CODE_DURATION_0) &&
+                              nec_check_in_range(cur->duration1, NEC_LEADING_CODE_DURATION_1);
+    if (!valid_leading_code) {
         return false;
     }
-}
-
-/*
- * @brief Check whether this value represents an NEC header
- */ 
-static bool nec_header_if(rmt_item32_t* item)
-{
-    ESP_LOGD(NEC_TAG,"Header Duration0: %x Level0: %x, Duration1: %x, Level1: %x",item->duration0,item->level0,item->duration1,item->level1);	
-	if((item->level0 == RMT_RX_ACTIVE_LEVEL && item->level1 != RMT_RX_ACTIVE_LEVEL)
-        && nec_check_in_range(item->duration0, NEC_HEADER_HIGH_US, NEC_BIT_MARGIN)
-        && nec_check_in_range(item->duration1, NEC_HEADER_LOW_US, NEC_BIT_MARGIN)) {
-        return true;
-    }
-    return false;
-}
-/*
- * @brief Check whether this value represents an NEC repeat
- */ 
-static bool nec_repeat_if(rmt_item32_t* item)
-{
-    ESP_LOGD(NEC_TAG,"Repeat Duration0: %x Level0: %x, Duration1: %x, Level1: %x",item->duration0,item->level0,item->duration1,item->level1);	
-	ESP_LOGV(NEC_TAG,"NEC_ITEM_DURATION0(%d)= %d",item->duration0,NEC_ITEM_DURATION(item->duration0));
-	ESP_LOGV(NEC_TAG,"NEC_ITEM_DURATION1(%d)= %d",item->duration1,NEC_ITEM_DURATION(item->duration1));
-	if((item->level0 == RMT_RX_ACTIVE_LEVEL && item->level1 != RMT_RX_ACTIVE_LEVEL)
-        && nec_check_in_range(item->duration0, NEC_HEADER_HIGH_US, NEC_BIT_MARGIN)
-        && nec_check_in_range(item->duration1, NEC_REPEAT_LOW_US, NEC_BIT_MARGIN)) {
-		ESP_LOGD(NEC_TAG,"nec_repeat_if true");
-        return true;
-    }
-    return false;
-}
-/*
- * @brief Check whether this value represents an NEC data bit 1
- */
- 
-static bool nec_bit_one_if(rmt_item32_t* item)
-{
-    ESP_LOGD(NEC_TAG,"nec_bit_one_if Duration0: %x Level0: %x, Duration1: %x, Level1: %x",item->duration0,item->level0,item->duration1,item->level1);
-	ESP_LOGV(NEC_TAG,"NEC_ITEM_DURATION0(%d)= %d",item->duration0,NEC_ITEM_DURATION(item->duration0));
-	ESP_LOGV(NEC_TAG,"NEC_ITEM_DURATION1(%d)= %d",item->duration1,NEC_ITEM_DURATION(item->duration1));
-    if((item->level0 == RMT_RX_ACTIVE_LEVEL && item->level1 != RMT_RX_ACTIVE_LEVEL)
-        && nec_check_in_range(item->duration0, NEC_BIT_ONE_HIGH_US, NEC_BIT_MARGIN)
-        && nec_check_in_range(item->duration1, NEC_BIT_ONE_LOW_US, NEC_BIT_MARGIN)) {
-		ESP_LOGD(NEC_TAG,"nec_bit_one_if true");
-        return true;
-    }
-    return false;
-}
-
-/*
- * @brief Check whether this value represents an NEC data bit 0
- */
-static bool nec_bit_zero_if(rmt_item32_t* item)
-{
-    ESP_LOGD(NEC_TAG,"nec_bit_zero_if Duration0: %x Level0: %x, Duration1: %x, Level1: %x",item->duration0,item->level0,item->duration1,item->level1);
-	ESP_LOGV(NEC_TAG,"NEC_ITEM_DURATION0(%d)= %d",item->duration0,NEC_ITEM_DURATION(item->duration0));
-	ESP_LOGV(NEC_TAG,"NEC_ITEM_DURATION1(%d)= %d",item->duration1,NEC_ITEM_DURATION(item->duration1));
-    if((item->level0 == RMT_RX_ACTIVE_LEVEL && item->level1 != RMT_RX_ACTIVE_LEVEL)
-        && nec_check_in_range(item->duration0, NEC_BIT_ZERO_HIGH_US, NEC_BIT_MARGIN)
-        && nec_check_in_range(item->duration1, NEC_BIT_ZERO_LOW_US, NEC_BIT_MARGIN)) {
-		ESP_LOGD(NEC_TAG,"nec_bit_zero_if true");	
-        return true;
-    }
-    return false;
-}
-
-
-
- /*
- * @brief Parse NEC 32 bit waveform to address and command.
- */
-static int nec_parse_items(rmt_item32_t* item, int item_num, uint16_t* addr, uint16_t* data)
-{
-	ESP_LOGD(NEC_TAG,"RMT item len: %d",item_num);
-//	ESP_LOGD(NEC_TAG,"Duration0: %x, Level0: %x, Duration1: %x, Level1: %x",item->duration0,item->level0,item->duration1,item->level1);
-	
-//	ESP_LOG_BUFFER_HEXDUMP(NEC_TAG, item, item_num, ESP_LOG_DEBUG);
-    int w_len = item_num;
-/*    if(w_len < NEC_DATA_ITEM_NUM) {
-		ESP_LOGD(NEC_TAG,"Duration0: %x, Level0: %x, Duration1: %x, Level1: %x",item->duration0,item->level0,item->duration1,item->level1);
-        return -1;
-    }
-*/
-    int i = 0, j = 0;
-	if((w_len == 2)&&(nec_repeat_if(item)))
-	{
-			ESP_LOGD(NEC_TAG,"Repeat detected");
-			return RTN_REPEAT;
-	}
-    if(!nec_header_if(item++)) {
-		item--;
-		ESP_LOGD(NEC_TAG,"Duration0: %x, Level0: %x, Duration1: %x, Level1: %x",item->duration0,item->level0,item->duration1,item->level1);
-		return -2;
-    }
-    uint16_t addr_t = 0;
-    for(j = 0; j < 16; j++) {
-        if(nec_bit_one_if(item)) {
-            addr_t |= (1 << j);
-        } else if(nec_bit_zero_if(item)) {
-            addr_t |= (0 << j);
+    cur++;
+    for (int i = 0; i < 16; i++) {
+        if (nec_parse_logic1(cur)) {
+            address |= 1 << i;
+        } else if (nec_parse_logic0(cur)) {
+            address &= ~(1 << i);
         } else {
-            return -3;
+            return false;
         }
-        item++;
-        i++;
+        cur++;
     }
-    uint16_t data_t = 0;
-    for(j = 0; j < 16; j++) {
-        if(nec_bit_one_if(item)) {
-            data_t |= (1 << j);
-        } else if(nec_bit_zero_if(item)) {
-            data_t |= (0 << j);
+    for (int i = 0; i < 16; i++) {
+        if (nec_parse_logic1(cur)) {
+            command |= 1 << i;
+        } else if (nec_parse_logic0(cur)) {
+            command &= ~(1 << i);
         } else {
-            return -4;
+            return false;
         }
-        item++;
-        i++;
+        cur++;
     }
-    *addr = addr_t ;
-    *data = data_t;
-    return i;
+    // save address and command
+    s_nec_code_address = address;
+    s_nec_code_command = command;
+    return true;
 }
 
-
-
-/*
- * @brief RMT receiver initialization
+/**
+ * @brief Check whether the RMT symbols represent NEC repeat code
  */
-static bool nec_rx_init()
+static bool nec_parse_frame_repeat(rmt_symbol_word_t *rmt_nec_symbols)
 {
-	esp_err_t err = ESP_OK;
+    return nec_check_in_range(rmt_nec_symbols->duration0, NEC_REPEAT_CODE_DURATION_0) &&
+           nec_check_in_range(rmt_nec_symbols->duration1, NEC_REPEAT_CODE_DURATION_1);
+}
+
+/**
+ * @brief Decode RMT symbols into NEC scan code and print the result
+ */
+static void parse_nec_frame(rmt_symbol_word_t *rmt_nec_symbols, size_t symbol_num)
+{
+    event_ir_t evt;
+	// decode RMT symbols
+    switch (symbol_num) {
+    case 34: // NEC normal frame
+        if (nec_parse_frame(rmt_nec_symbols)) 
+		{
+            ESP_LOGD(TAG, "Address=%04X, Command=%04X\r\n\r\n", s_nec_code_address, s_nec_code_command);
+			evt.addr = s_nec_code_address;
+			evt.cmd  = s_nec_code_command;
+			xQueueSend(event_ir,&evt, 0);
+        }
+        break;
+    case 2: // NEC rDepeat frame
+        if (nec_parse_frame_repeat(rmt_nec_symbols))
+		{
+            ESP_LOGD(TAG, "Address=%04X, Command=%04X, repeat\r\n\r\n", s_nec_code_address, s_nec_code_command);
+			evt.addr = s_nec_code_address;
+			evt.cmd  = s_nec_code_command;
+			xQueueSend(event_ir,&evt, 0);
+        }
+        break;
+    default:
+        ESP_LOGE(TAG, "Unknown NEC frame\r\n\r\n");
+        break;
+    }
+}
+
+static bool rmt_rx_done_callback(rmt_channel_handle_t channel, rmt_rx_done_event_data_t *edata, void *user_data)
+{
+    BaseType_t high_task_wakeup = pdFALSE;
+    TaskHandle_t task_to_notify = (TaskHandle_t)user_data;
+    // send the received RMT symbols to the parser task
+    xTaskNotifyFromISR(task_to_notify, (uint32_t)edata, eSetValueWithOverwrite, &high_task_wakeup);
+    return high_task_wakeup == pdTRUE;
+}
+
+rmt_channel_handle_t rmt_rx_channel = NULL;
+// the following timing requirement is based on NEC protocol
+rmt_receive_config_t receive_config = 
+{
+        .signal_range_min_ns = 1250,     // the shortest duration for NEC signal is 560us, 1250ns < 560us, valid signal won't be treated as noise
+        .signal_range_max_ns = 12000000, // the longest duration for NEC signal is 9000us, 12000000ns > 9000us, the receive won't stop early
+};
+
+// save the received RMT symbols
+rmt_symbol_word_t raw_symbols[64]; // 64 symbols should be sufficient for a standard NEC frame
+rmt_rx_done_event_data_t *rx_data = NULL;
+
+IRAM_ATTR bool rmt_nec_rx_init(void)
+{
+    esp_err_t err = ESP_OK;
 	gpio_num_t ir;
 	gpio_get_ir_signal(&ir);
 	if (ir == GPIO_NONE) return false; //no IR needed
-    rmt_config_t rmt_rx;
-    rmt_rx.channel = RMT_RX_CHANNEL;
-    rmt_rx.gpio_num = ir;
-    rmt_rx.clk_div = RMT_CLK_DIV;
-    rmt_rx.mem_block_num = 1;
-    rmt_rx.rmt_mode = RMT_MODE_RX;
-    rmt_rx.rx_config.filter_en = true;
-    rmt_rx.rx_config.filter_ticks_thresh = 100;
-    rmt_rx.rx_config.idle_threshold = rmt_item32_tIMEOUT_US / 10 * (RMT_TICK_10_US);
-    ESP_ERROR_CHECK(rmt_config(&rmt_rx));
-    err = rmt_driver_install(rmt_rx.channel, 1000, 0);
-	if (err != ESP_OK) {ESP_LOGE(NEC_TAG,"Rrmt_driver_install failed %x",err); return false;}
+    
+	ESP_LOGI(TAG, "create RMT RX channel");
+    rmt_rx_channel_config_t rmt_rx_channel_cfg = 
+	{
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .resolution_hz = 8000,
+        .mem_block_symbols = 64, // amount of RMT symbols that the channel can store at a time
+        .gpio_num = 19,
+		.flags.with_dma = false,
+		.flags.io_loop_back = false,
+    };
+
+	err = rmt_new_rx_channel(&rmt_rx_channel_cfg, &rmt_rx_channel);
+	if (err != ESP_OK)
+	{
+		ESP_LOGE(TAG,"create RMT RX channel failed! %x",err); 
+		return false;
+	}
+    
+	ESP_LOGI(TAG, "register RX done callback");
+    TaskHandle_t cur_task = xTaskGetCurrentTaskHandle();
+    rmt_rx_event_callbacks_t cbs = 
+	{
+        .on_recv_done = rmt_rx_done_callback,
+    };
+    
+	err = rmt_rx_register_event_callbacks(rmt_rx_channel, &cbs, cur_task);
+	if (err != ESP_OK)
+	{
+		ESP_LOGE(TAG,"register RX callback failed! %x",err); 
+		return false;
+	}
+
+	err = rmt_enable(rmt_rx_channel);
+	if (err != ESP_OK)
+	{
+		ESP_LOGE(TAG,"enable RX channel failed! %x",err); 
+		return false;
+	}
+  
+	// ready to receive
+   	err = rmt_receive(rmt_rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config);
+	if (err != ESP_OK)
+	{
+		ESP_LOGE(TAG,"received data failed! %x",err); 
+		return false;
+	}
+
 	return true;
 }
 
-
-/**
- * @brief RMT receiver , this task will send each received NEC data to a queue.
- *
- */
-void rmt_nec_rx_task()
+IRAM_ATTR void rmt_nec_rx_task(void)
 {
-	event_ir_t evt;
-	event_ir_t last_evt;
-    int channel = RMT_RX_CHANNEL;
-    if (nec_rx_init())
+	if (rmt_nec_rx_init())
 	{
-		RingbufHandle_t rb = NULL;
-		bool flagFirstRepeat = false;
-		//get RMT RX ringbuffer
-		ESP_ERROR_CHECK(rmt_get_ringbuf_handle(channel, &rb) );
-		ESP_ERROR_CHECK(rmt_rx_start(channel, 1));
-		ESP_LOGD(NEC_TAG,"RMT started");
-		while(rb) {
-			size_t rx_size = 0;
-			//try to receive data from ringbuffer.
-			//RMT driver will push all the data it receives to its ringbuffer.
-			//We just need to parse the value and return the spaces of ringbuffer.
-			rmt_item32_t* item = (rmt_item32_t*) xRingbufferReceive(rb, &rx_size, 1000);
-			if(item) {
-				uint16_t rmt_addr;
-				uint16_t rmt_cmd;
-				int offset = 0;
-				while(1) {
-					//parse data value from ringbuffer.
-					int res = nec_parse_items(item + offset, rx_size / 4 - offset, &rmt_addr, &rmt_cmd);
-					if (res == RTN_REPEAT)
-					{
-						if (flagFirstRepeat ==  true)
-							xQueueSend(event_ir,&last_evt, 0);
-						flagFirstRepeat = true;	// not the first one
-						offset += 3;		
-					}
-					else if(res > 0) {
-						offset += res + 1;
-						ESP_LOGD(NEC_TAG, "RMT RCV --- addr: 0x%04x cmd: 0x%04x", rmt_addr, rmt_cmd);
-						evt.channel = channel;
-						evt.addr = rmt_addr;
-						evt.cmd =  rmt_cmd;
-						evt.repeat_flag = false;
-						last_evt.addr = evt.addr;
-						last_evt.cmd = evt.cmd;
-						last_evt.repeat_flag = true;
-						flagFirstRepeat = false;
-						xQueueSend(event_ir,&evt, 0);
-					} else {
-						ESP_LOGD(NEC_TAG, "RMT Res: %d",res);
-						break;
-					}
-				}
-				//after parsing the data, return spaces to ringbuffer.
-				vRingbufferReturnItem(rb, (void*) item);
-			} else 	{
-				vTaskDelay(10);
-				//break;
-			}
+		while (1) 
+		{
+			// wait for RX done signal
+			if (xTaskNotifyWait(0x00, ULONG_MAX, (uint32_t *)&rx_data, pdMS_TO_TICKS(1000)) == pdTRUE) 
+			{
+				// parse the receive symbols and print the result
+				parse_nec_frame(rx_data->received_symbols, rx_data->num_symbols);
+				// start receive again
+				ESP_ERROR_CHECK(rmt_receive(rmt_rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
+			} 
 		}
 	}
-	ESP_LOGD(NEC_TAG,"RMT finished");
-    vTaskDelete(NULL);
+	ESP_LOGD(TAG,"RMT finished");
+	vTaskDelete(NULL);
 }

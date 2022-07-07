@@ -81,8 +81,15 @@ void VS1053_spi_init(){
 //		.flags = SPICOMMON_BUSFLAG_NATIVE_PINS|SPICOMMON_BUSFLAG_MASTER
 		.flags = SPICOMMON_BUSFLAG_MASTER	
 	};		
-	ret=spi_bus_initialize(spi_no, &buscfg, 1);	 // dma	
-	assert(ret==ESP_OK);
+	ret = spi_bus_initialize(spi_no, &buscfg, 1);	 // dma	
+	
+	if (ret != ESP_OK)
+	{
+		ESP_LOGE(TAG,"SPI init failed! %x",ret); 
+		return;
+	}
+	
+	assert(ret == ESP_OK);
 }
 
 int getVsVersion() { return vsVersion;}
