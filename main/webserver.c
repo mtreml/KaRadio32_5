@@ -543,7 +543,7 @@ static void handlePOST(char* name, char* data, int data_size, int conn) {
 			{
 				if ((atoi(id) >=0) && (atoi(id) < 255))
 				{
-					char ibuf [6];
+					char ibuf [15];
 					char *buf;
 					for(int i = 0; i<sizeof(ibuf); i++) ibuf[i] = 0;
 					struct shoutcast_info* si;
@@ -702,13 +702,13 @@ static void handlePOST(char* name, char* data, int data_size, int conn) {
 	} else if(strcmp(name, "/icy") == 0)
 	{
 		ESP_LOGV(TAG,"icy vol");
-		char currentSt[5]; sprintf(currentSt,"%d",getCurrentStation());
-		char vol[5]; sprintf(vol,"%d",(getVolume() ));
-		char treble[5]; sprintf(treble,"%d",(get_audio_output_mode() == VS1053)?VS1053_GetTreble():0);
-		char bass[5]; sprintf(bass,"%d",(get_audio_output_mode() == VS1053)?VS1053_GetBass():0);
-		char tfreq[5]; sprintf(tfreq,"%d",(get_audio_output_mode() == VS1053)?VS1053_GetTrebleFreq():0);
-		char bfreq[5]; sprintf(bfreq,"%d",(get_audio_output_mode() == VS1053)?VS1053_GetBassFreq():0);
-		char spac[5]; sprintf(spac,"%d",(get_audio_output_mode() == VS1053)?VS1053_GetSpatial():0);
+		char currentSt[7]; sprintf(currentSt,"%d",getCurrentStation());
+		char vol[7]; sprintf(vol,"%d",(getVolume() ));
+		char treble[7]; sprintf(treble,"%d",(get_audio_output_mode() == VS1053)?VS1053_GetTreble():0);
+		char bass[7]; sprintf(bass,"%d",(get_audio_output_mode() == VS1053)?VS1053_GetBass():0);
+		char tfreq[7]; sprintf(tfreq,"%d",(get_audio_output_mode() == VS1053)?VS1053_GetTrebleFreq():0);
+		char bfreq[7]; sprintf(bfreq,"%d",(get_audio_output_mode() == VS1053)?VS1053_GetBassFreq():0);
+		char spac[7]; sprintf(spac,"%d",(get_audio_output_mode() == VS1053)?VS1053_GetSpatial():0);
 
 		struct icyHeader *header = clientGetHeader();
 		ESP_LOGV(TAG,"icy start header %x",(int)header);

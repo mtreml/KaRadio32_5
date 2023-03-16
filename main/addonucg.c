@@ -810,7 +810,7 @@ void drawVolumeUcg(uint8_t mTscreen)
 {
   char vlstr[] = {"Volume"};
 //  volume = atoi(aVolume);
-  char aVolume[4];
+  char aVolume[7];
   sprintf(aVolume,"%d",volume);
     switch (mTscreen){
       case 1: 
@@ -878,7 +878,7 @@ static  void drawInfo(unsigned timein)
 
 void drawTimeUcg(uint8_t mTscreen,unsigned timein)
 {
-  char strdate[23];
+  char strdate[36];
   char strtime[20];
   LANG scharset;
     sprintf(strtime,"%02d:%02d", dt->tm_hour, dt->tm_min);

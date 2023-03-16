@@ -175,7 +175,7 @@ int buf_seek_abs(buffer_t *buf, uint32_t pos)
     if (buf == NULL) return -1;
 
     if(pos > (uint32_t)buf->fill_pos) {
-        ESP_LOGE(TAG, "buf_seek_abs failed, pos = %u larger than fill_pos %u", pos, (uint32_t) buf->fill_pos);
+        ESP_LOGE(TAG, "buf_seek_abs failed, pos = %" PRIu32 " larger than fill_pos %" PRIu32 "", pos, (uint32_t) buf->fill_pos);
         return -1;
     }
 

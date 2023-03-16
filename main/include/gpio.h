@@ -8,6 +8,7 @@
 #define __GPIO_H__
 #include "nvs_flash.h"
 #include "driver/spi_master.h"
+#include "driver/gpio.h"
 #include "esp_adc_cal.h"
 #include "app_main.h"
 

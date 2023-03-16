@@ -296,7 +296,7 @@ uint64_t getWake()
 void tsocket(const char* lab, uint32_t cnt)
 {
 		char* title = kmalloc(strlen(lab)+50);
-		sprintf(title,"{\"%s\":\"%d\"}",lab,cnt*60); 
+		sprintf(title,"{\"%s\":\"%" PRIu32 "\"}",lab,cnt*60); 
 		websocketbroadcast(title, strlen(title));
 		free(title);	
 }
@@ -314,7 +314,7 @@ gptimer_alarm_config_t  alarm_config = {
     .flags.auto_reload_on_alarm = false, // enable auto-reload
 };
 void startSleep(uint32_t delay){
-	ESP_LOGD(TAG,"startSleep: %d min.",delay );
+	ESP_LOGD(TAG,"startSleep: %" PRIu32 " min.",delay );
 	ESP_ERROR_CHECK(gptimer_stop(sleeptimer));
 	vTaskDelay(1);
 	if (delay == 0) return;
@@ -333,7 +333,7 @@ gptimer_event_callbacks_t cbsw = {
 		.on_alarm = wakeCallback, // register user callback
 };
 void startWake(uint32_t delay){
-	ESP_LOGD(TAG,"startWake: %d min.",delay );
+	ESP_LOGD(TAG,"startWake: %" PRIu32 " min.",delay );
 	ESP_ERROR_CHECK(gptimer_stop(waketimer));
 	vTaskDelay(1);
 	if (delay == 0) return;
@@ -1061,10 +1061,10 @@ void app_main()
 	esp_err_t err;
 
 	ESP_LOGI(TAG, "starting app_main()");
-    ESP_LOGE(TAG, "RAM left: %u", esp_get_free_heap_size());
+    ESP_LOGE(TAG, "RAM left: %" PRIu32 "", esp_get_free_heap_size());
 
 	const esp_partition_t *running = esp_ota_get_running_partition();
-	ESP_LOGE(TAG, "Running partition type %d subtype %d (offset 0x%08x)",
+	ESP_LOGE(TAG, "Running partition type %d subtype %d (offset 0x%08" PRIu32 ")",
              running->type, running->subtype, running->address);
     // Initialize NVS.
     err = nvs_flash_init();
@@ -1207,7 +1207,7 @@ void app_main()
 	uspeed = g_device->uartspeed;	
 	uspeed = checkUart(uspeed);	
 	uart_set_baudrate(UART_NUM_0, uspeed);
-	ESP_LOGI(TAG, "Set baudrate at %d",uspeed);
+	ESP_LOGI(TAG, "Set baudrate at %" PRIu32 "",uspeed);
 	if (g_device->uartspeed != uspeed)
 	{
 		g_device->uartspeed = uspeed;
@@ -1217,8 +1217,8 @@ void app_main()
 
 	// Version infos
 	ESP_LOGI(TAG, "\n");
-	ESP_LOGI(TAG, "Project name: %s",esp_ota_get_app_description()->project_name);
-	ESP_LOGI(TAG, "Version: %s",esp_ota_get_app_description()->version);
+	ESP_LOGI(TAG, "Project name: %s",esp_app_get_description()->project_name);
+	ESP_LOGI(TAG, "Version: %s",esp_app_get_description()->version);
 	ESP_LOGI(TAG, "Release %s, Revision %s",RELEASE,REVISION);
 //	ESP_LOGI(TAG, "Date: %s,  Time: %s",esp_ota_get_app_description()->date,esp_ota_get_app_description()->time);
 	ESP_LOGI(TAG, "SDK %s",esp_get_idf_version());	
@@ -1251,18 +1251,18 @@ void app_main()
 // start the network
 //-----------------------------
     /* init wifi & network*/
-	ESP_LOGE(TAG, "RAM left bw: %u", esp_get_free_heap_size());
+	ESP_LOGE(TAG, "RAM left bw: %" PRIu32 "", esp_get_free_heap_size());
     start_wifi();
-	ESP_LOGE(TAG, "RAM left aw: %u", esp_get_free_heap_size());
+	ESP_LOGE(TAG, "RAM left aw: %" PRIu32 "", esp_get_free_heap_size());
 	start_network();
-	ESP_LOGE(TAG, "RAM left an: %u", esp_get_free_heap_size());
+	ESP_LOGE(TAG, "RAM left an: %" PRIu32 "", esp_get_free_heap_size());
 	
 //-----------------------------------------------------
 //init softwares
 //-----------------------------------------------------
 
 	clientInit();	
-	ESP_LOGE(TAG, "RAM left ac: %u", esp_get_free_heap_size());
+	ESP_LOGE(TAG, "RAM left ac: %" PRIu32 "", esp_get_free_heap_size());
 	//initialize mDNS service
     err = mdns_init();
     if (err) 
@@ -1298,7 +1298,7 @@ void app_main()
 	// LCD Display infos
     lcd_welcome(localIp,"STARTED");
 	vTaskDelay(10);
-    ESP_LOGI(TAG, "RAM left %d", esp_get_free_heap_size());
+    ESP_LOGI(TAG, "RAM left %" PRIu32 "", esp_get_free_heap_size());
 
 	//start tasks of KaRadio32
 	vTaskDelay(1);
@@ -1318,7 +1318,7 @@ void app_main()
 	kprintf("READY. Type help for a list of commands\n");
 	// error log on telnet
 	esp_log_set_vprintf((vprintf_like_t)lkprintf);
-	ESP_LOGI(TAG, "RAM left %d", esp_get_free_heap_size());
+	ESP_LOGI(TAG, "RAM left %" PRIu32 "", esp_get_free_heap_size());
 	//autostart		
 	autoPlay();
 // All done.

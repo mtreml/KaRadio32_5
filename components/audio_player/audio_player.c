@@ -37,7 +37,7 @@ static int start_decoder_task(player_t *player)
     uint16_t stack_depth;
 	int priority = PRIO_MAD;
 
-    ESP_LOGD(TAG, "RAM left %d", esp_get_free_heap_size());
+    ESP_LOGD(TAG, "RAM left %" PRIu32 "", esp_get_free_heap_size());
 	if (get_audio_output_mode() == VS1053)
 	{
 		task_func = vsTask;
