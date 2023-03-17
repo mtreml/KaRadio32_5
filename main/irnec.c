@@ -1,11 +1,10 @@
 /******************************************************************************
- * 
+ *
  * Copyright 2017 karawin (http://www.karawin.fr)
  *
  * Receive and decode nec IR. Send result in a queue
  *
-*******************************************************************************/
-
+ *******************************************************************************/
 
 #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "ClickEncoder.h"
@@ -26,20 +25,20 @@
 #include "esp_log.h"
 #include "driver/rmt_rx.h"
 
-#define IR_RESOLUTION_HZ     1000000 // 1MHz resolution, 1 tick = 1us
-#define IR_NEC_DECODE_MARGIN 200     // Tolerance for parsing RMT symbols into bit stream
+#define IR_RESOLUTION_HZ 1000000 // 1MHz resolution, 1 tick = 1us
+#define IR_NEC_DECODE_MARGIN 200 // Tolerance for parsing RMT symbols into bit stream
 
 /**
  * @brief NEC timing spec
  */
-#define NEC_LEADING_CODE_DURATION_0  9000
-#define NEC_LEADING_CODE_DURATION_1  4500
-#define NEC_PAYLOAD_ZERO_DURATION_0  560
-#define NEC_PAYLOAD_ZERO_DURATION_1  560
-#define NEC_PAYLOAD_ONE_DURATION_0   560
-#define NEC_PAYLOAD_ONE_DURATION_1   1690
-#define NEC_REPEAT_CODE_DURATION_0   9000
-#define NEC_REPEAT_CODE_DURATION_1   2250
+#define NEC_LEADING_CODE_DURATION_0 9000
+#define NEC_LEADING_CODE_DURATION_1 4500
+#define NEC_PAYLOAD_ZERO_DURATION_0 560
+#define NEC_PAYLOAD_ZERO_DURATION_1 560
+#define NEC_PAYLOAD_ONE_DURATION_0 560
+#define NEC_PAYLOAD_ONE_DURATION_1 1690
+#define NEC_REPEAT_CODE_DURATION_0 9000
+#define NEC_REPEAT_CODE_DURATION_1 2250
 
 static const char *TAG = "IR_NEC";
 
@@ -86,26 +85,39 @@ static bool nec_parse_frame(rmt_symbol_word_t *rmt_nec_symbols)
     uint16_t command = 0;
     bool valid_leading_code = nec_check_in_range(cur->duration0, NEC_LEADING_CODE_DURATION_0) &&
                               nec_check_in_range(cur->duration1, NEC_LEADING_CODE_DURATION_1);
-    if (!valid_leading_code) {
+    if (!valid_leading_code)
+    {
         return false;
     }
     cur++;
-    for (int i = 0; i < 16; i++) {
-        if (nec_parse_logic1(cur)) {
+    for (int i = 0; i < 16; i++)
+    {
+        if (nec_parse_logic1(cur))
+        {
             address |= 1 << i;
-        } else if (nec_parse_logic0(cur)) {
+        }
+        else if (nec_parse_logic0(cur))
+        {
             address &= ~(1 << i);
-        } else {
+        }
+        else
+        {
             return false;
         }
         cur++;
     }
-    for (int i = 0; i < 16; i++) {
-        if (nec_parse_logic1(cur)) {
+    for (int i = 0; i < 16; i++)
+    {
+        if (nec_parse_logic1(cur))
+        {
             command |= 1 << i;
-        } else if (nec_parse_logic0(cur)) {
+        }
+        else if (nec_parse_logic0(cur))
+        {
             command &= ~(1 << i);
-        } else {
+        }
+        else
+        {
             return false;
         }
         cur++;
@@ -131,24 +143,25 @@ static bool nec_parse_frame_repeat(rmt_symbol_word_t *rmt_nec_symbols)
 static void parse_nec_frame(rmt_symbol_word_t *rmt_nec_symbols, size_t symbol_num)
 {
     event_ir_t evt;
-	// decode RMT symbols
-    switch (symbol_num) {
+    // decode RMT symbols
+    switch (symbol_num)
+    {
     case 34: // NEC normal frame
-        if (nec_parse_frame(rmt_nec_symbols)) 
-		{
+        if (nec_parse_frame(rmt_nec_symbols))
+        {
             ESP_LOGD(TAG, "Address=%04X, Command=%04X\r\n\r\n", s_nec_code_address, s_nec_code_command);
-			evt.addr = s_nec_code_address;
-			evt.cmd  = s_nec_code_command;
-			xQueueSend(event_ir,&evt, 0);
+            evt.addr = s_nec_code_address;
+            evt.cmd = s_nec_code_command;
+            xQueueSend(event_ir, &evt, 0);
         }
         break;
     case 2: // NEC rDepeat frame
         if (nec_parse_frame_repeat(rmt_nec_symbols))
-		{
+        {
             ESP_LOGD(TAG, "Address=%04X, Command=%04X, repeat\r\n\r\n", s_nec_code_address, s_nec_code_command);
-			evt.addr = s_nec_code_address;
-			evt.cmd  = s_nec_code_command;
-			xQueueSend(event_ir,&evt, 0);
+            evt.addr = s_nec_code_address;
+            evt.cmd = s_nec_code_command;
+            xQueueSend(event_ir, &evt, 0);
         }
         break;
     default:
@@ -168,8 +181,8 @@ static bool rmt_rx_done_callback(rmt_channel_handle_t channel, rmt_rx_done_event
 
 rmt_channel_handle_t rmt_rx_channel = NULL;
 // the following timing requirement is based on NEC protocol
-rmt_receive_config_t receive_config = 
-{
+rmt_receive_config_t receive_config =
+    {
         .signal_range_min_ns = 1250,     // the shortest duration for NEC signal is 560us, 1250ns < 560us, valid signal won't be treated as noise
         .signal_range_max_ns = 12000000, // the longest duration for NEC signal is 9000us, 12000000ns > 9000us, the receive won't stop early
 };
@@ -181,76 +194,77 @@ rmt_rx_done_event_data_t *rx_data = NULL;
 IRAM_ATTR bool rmt_nec_rx_init(void)
 {
     esp_err_t err = ESP_OK;
-	gpio_num_t ir;
-	gpio_get_ir_signal(&ir);
-	if (ir == GPIO_NONE) return false; //no IR needed
-    
-	ESP_LOGI(TAG, "create RMT RX channel");
-    rmt_rx_channel_config_t rmt_rx_channel_cfg = 
-	{
-        .clk_src = RMT_CLK_SRC_DEFAULT,
-        .resolution_hz = 8000,
-        .mem_block_symbols = 64, // amount of RMT symbols that the channel can store at a time
-        .gpio_num = 19,
-		.flags.with_dma = false,
-		.flags.io_loop_back = false,
-    };
+    gpio_num_t ir;
+    gpio_get_ir_signal(&ir);
+    if (ir == GPIO_NONE)
+        return false; // no IR needed
 
-	err = rmt_new_rx_channel(&rmt_rx_channel_cfg, &rmt_rx_channel);
-	if (err != ESP_OK)
-	{
-		ESP_LOGE(TAG,"create RMT RX channel failed! %x",err); 
-		return false;
-	}
-    
-	ESP_LOGI(TAG, "register RX done callback");
+    ESP_LOGI(TAG, "create RMT RX channel");
+    rmt_rx_channel_config_t rmt_rx_channel_cfg =
+        {
+            .clk_src = RMT_CLK_SRC_DEFAULT,
+            .resolution_hz = 8000,
+            .mem_block_symbols = 64, // amount of RMT symbols that the channel can store at a time
+            .gpio_num = 19,
+            .flags.with_dma = false,
+            .flags.io_loop_back = false,
+        };
+
+    err = rmt_new_rx_channel(&rmt_rx_channel_cfg, &rmt_rx_channel);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "create RMT RX channel failed! %x", err);
+        return false;
+    }
+
+    ESP_LOGI(TAG, "register RX done callback");
     TaskHandle_t cur_task = xTaskGetCurrentTaskHandle();
-    rmt_rx_event_callbacks_t cbs = 
-	{
-        .on_recv_done = rmt_rx_done_callback,
-    };
-    
-	err = rmt_rx_register_event_callbacks(rmt_rx_channel, &cbs, cur_task);
-	if (err != ESP_OK)
-	{
-		ESP_LOGE(TAG,"register RX callback failed! %x",err); 
-		return false;
-	}
+    rmt_rx_event_callbacks_t cbs =
+        {
+            .on_recv_done = rmt_rx_done_callback,
+        };
 
-	err = rmt_enable(rmt_rx_channel);
-	if (err != ESP_OK)
-	{
-		ESP_LOGE(TAG,"enable RX channel failed! %x",err); 
-		return false;
-	}
-  
-	// ready to receive
-   	err = rmt_receive(rmt_rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config);
-	if (err != ESP_OK)
-	{
-		ESP_LOGE(TAG,"received data failed! %x",err); 
-		return false;
-	}
+    err = rmt_rx_register_event_callbacks(rmt_rx_channel, &cbs, cur_task);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "register RX callback failed! %x", err);
+        return false;
+    }
 
-	return true;
+    err = rmt_enable(rmt_rx_channel);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "enable RX channel failed! %x", err);
+        return false;
+    }
+
+    // ready to receive
+    err = rmt_receive(rmt_rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "received data failed! %x", err);
+        return false;
+    }
+
+    return true;
 }
 
 IRAM_ATTR void rmt_nec_rx_task(void)
 {
-	if (rmt_nec_rx_init())
-	{
-		while (1) 
-		{
-			// wait for RX done signal
-			if (xTaskNotifyWait(0x00, ULONG_MAX, (uint32_t *)&rx_data, pdMS_TO_TICKS(1000)) == pdTRUE) 
-			{
-				// parse the receive symbols and print the result
-				parse_nec_frame(rx_data->received_symbols, rx_data->num_symbols);
-				// start receive again
-				ESP_ERROR_CHECK(rmt_receive(rmt_rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
-			} 
-		}
-	}
-	ESP_LOGD(TAG,"RMT finished");
-	vTaskDelete(NULL);
+    if (rmt_nec_rx_init())
+    {
+        while (1)
+        {
+            // wait for RX done signal
+            if (xTaskNotifyWait(0x00, ULONG_MAX, (uint32_t *)&rx_data, pdMS_TO_TICKS(1000)) == pdTRUE)
+            {
+                // parse the receive symbols and print the result
+                parse_nec_frame(rx_data->received_symbols, rx_data->num_symbols);
+                // start receive again
+                ESP_ERROR_CHECK(rmt_receive(rmt_rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
+            }
+        }
+    }
+    ESP_LOGD(TAG, "RMT finished");
+    vTaskDelete(NULL);
 }
