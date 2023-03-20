@@ -196,8 +196,8 @@ IRAM_ATTR bool rmt_nec_rx_init(void)
     esp_err_t err = ESP_OK;
     gpio_num_t ir;
     gpio_get_ir_signal(&ir);
-    if (ir == GPIO_NONE)
-        return false; // no IR needed
+    //if (ir == GPIO_NONE)
+    return false; // no IR needed
 
     ESP_LOGI(TAG, "create RMT RX channel");
     rmt_rx_channel_config_t rmt_rx_channel_cfg =

@@ -31,4 +31,5 @@ void ntp_print_time();
 int8_t  applyTZ(struct tm *time);
 extern void* kmalloc(size_t memorySize);
 extern void* kcalloc(size_t elementCount, size_t elementSize);
+static int _sntp_init = -1;
 #endif
