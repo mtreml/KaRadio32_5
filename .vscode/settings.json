@@ -1,5 +1,0 @@
-{
-    "idf.adapterTargetName": "esp32",
-    "idf.toolsPathWin": "z:\\espressif",
-    "idf.customExtraPaths": "z:\\espressif\\tools\\xtensa-esp-elf-gdb\\12.1_20221002\\xtensa-esp-elf-gdb\\bin;z:\\espressif\\tools\\riscv32-esp-elf-gdb\\12.1_20221002\\riscv32-esp-elf-gdb\\bin;z:\\espressif\\tools\\xtensa-esp32-elf\\esp-12.2.0_20230208\\xtensa-esp32-elf\\bin;z:\\espressif\\tools\\xtensa-esp32s2-elf\\esp-12.2.0_20230208\\xtensa-esp32s2-elf\\bin;z:\\espressif\\tools\\xtensa-esp32s3-elf\\esp-12.2.0_20230208\\xtensa-esp32s3-elf\\bin;z:\\espressif\\tools\\riscv32-esp-elf\\esp-12.2.0_20230208\\riscv32-esp-elf\\bin;z:\\espressif\\tools\\esp32ulp-elf\\2.35_20220830\\esp32ulp-elf\\bin;z:\\espressif\\tools\\cmake\\3.24.0\\bin;z:\\espressif\\tools\\openocd-esp32\\v0.11.0-esp32-20221026\\openocd-esp32\\bin;z:\\espressif\\tools\\ninja\\1.10.2;z:\\espressif\\tools\\idf-exe\\1.0.3;z:\\espressif\\tools\\ccache\\4.6.2\\ccache-4.6.2-windows-x86_64;z:\\espressif\\tools\\dfu-util\\0.11\\dfu-util-0.11-win64;z:\\espressif\\tools\\esp-rom-elfs\\20230113"
-}
